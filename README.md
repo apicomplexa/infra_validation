@@ -16,8 +16,10 @@ Overture Places, Foursquare OS Places, реестр лицензий ФСРАР 
 Код перенесён из архивного репозитория `infrastructure_2026` (тег
 `archive-2026-10-30`) один к одному. Паритет со старыми выходами проверяется
 тестами. Устройство описано в [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md),
-схема потока — в [`docs/architecture.qmd`](docs/architecture.qmd)
-(`pixi run docs` → `results/docs/architecture.html`).
+схема потока — в [`docs/architecture.qmd`](docs/architecture.qmd).
+Как пользоваться, DAG по категориям, dataflow каждой метрики и алгоритмы
+матчеров со схемами — в [`docs/workflow.qmd`](docs/workflow.qmd)
+(`pixi run docs` → `results/docs/architecture.html`, `results/docs/workflow.html`).
 
 ## Быстрый старт
 

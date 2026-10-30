@@ -47,7 +47,7 @@ COLUMNS = {
     "matched_name": "string",
     "matched_address": "string",
     "distance_m": "Float64",
-    "name_score": "Float64",
+    "name_score": "Float64",   # 0-100, the check's own name rule
     "ref": "string",           # URL / record id / licence number
     "label": "string",         # display label of the clause, e.g. "OSM", "Яндекс (подрядчик)"
     "text": "string",          # clause body for «Основания»

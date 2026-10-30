@@ -1,7 +1,7 @@
 # licmatch
 
 Address-level record linkage between an object export and a licence register,
-for Russian addresses.  Version **1.1.0**.
+for Russian addresses.  Version **1.2.0**.
 
 Two sources describe the same door in different words; one of them names a
 licence *holder* rather than a *shop*; half of one side carries no usable
@@ -17,7 +17,7 @@ checked, and which readings of the result are forbidden — is
 It was extracted from `src/arkhinfra/v4_egais.py`, where the rule and one
 study's column names lived together. Split out, it gains three things:
 
-* it is **testable without the study's data** — 130 unit tests on small
+* it is **testable without the study's data** — 159 unit tests on small
   hand-built fixtures;
 * the study-specific half shrinks to adapters, output columns and the domain
   reading of a match, which is what a reviewer should be arguing about;
@@ -55,6 +55,48 @@ sel.take(registry["licence_no"])   # the chosen licence per object
 sel.counts["active"]         # distinct licences in force at the address
 sel.joined("matched")        # "L-1; L-2"
 ```
+
+### New in 1.2: the whole match as one pure function
+
+```python
+res = lm.match(objects, register, policy)    # no files, no network, no globals
+res.table        # one row per object, indexed like `objects`
+res.brand        # the learned-brand result of an unblocked run (brands="learned")
+```
+
+`objects`: `name`, `address` (+ optional `address_2`), `lat`, `lon`, plus any
+column the policy names.  `register` (RegisterTable): `record_id`, `holder_id`,
+`holder_name`, `venue_name`, `address_line`, `street` / `house` / `settlement` /
+`block`, `lat`, `lon`, `in_force`, `kind`.
+
+Five stages, each a function of `licmatch.stages`: **candidates** (`prepare`)
+→ **scoring** (`score`, brands learned here) → **admission** (`admit`: a list
+of named conditions — `address`, `kind` / `kind_or_holder`, `in_force`,
+`name`, `brand`, `archived`) → **assignment** (`assign`: one unit per object,
+greedy, strongest claim first) → **explanation** (`explain`: a ladder of
+near-miss rungs, and the conditions the best rejected candidate failed).
+
+```python
+policy = lm.Policy(
+    home_cities=("Архангельск",),
+    kinds=lm.Kinds(allowed=frozenset({"catering"}), wrong=frozenset({"retail"})),
+    require_in_force=True,
+    name_policy="required", name_fields=("holder", "venue"),
+    unit=("street", "house", "venue"),
+    exclusive=lm.Exclusive(share="name", fallback=False),
+    explain=(lm.Rung(lm.OTHER_HOLDER, (lm.C_ADDRESS, lm.C_KIND, lm.C_IN_FORCE)),
+             lm.Rung(lm.INACTIVE, (lm.C_ADDRESS, lm.C_KIND, lm.C_NAME))),
+)
+t = lm.match(objects, register, policy).table
+t[["status", "record", "failed_rule", "score", "claimed_by"]]
+```
+
+Statuses are codes only — `own`, `inactive`, `taken`, `other_holder`,
+`other_chain`, `wrong_kind`, `elsewhere`, `none`; the sentence a reader sees is
+the adapter's.  The two archived joins (the v4 risk layers and the final
+delivery's catering check) are two `Policy` values of this one function, and
+reproduce their archived outputs cell for cell.  `lm.names_agree()` is the
+word-level yes/no name rule the catering policy requires.  Methodology §19.
 
 ### New in 1.1
 
@@ -106,6 +148,8 @@ source's column names, dialect or file format, an adapter parses it into
 | `scoring.py` | `MatchParams`, the pair formula, the dense matrix, admission, name kinds |
 | `select.py` | choice, ranked preference, eligibility, exclusive assignment, distinct-key tallies, reverse coverage |
 | `brands.py` | `learn_brands`: (fascia, holder) pairs learned by voting across addresses |
+| `agree.py` | `names_agree`: the word-level, two-script yes/no name rule |
+| `stages.py` | `match()`, `Policy` and the five stages |
 | `geo.py` | haversine |
 
 ## Install
@@ -135,7 +179,8 @@ twin `TestMatrixMatchesFormulaGenericAndAlias`): the dense matrix is an
 optimisation of `pair_score()`, and an optimisation that quietly disagrees with
 its definition is the defect class the suite exists to catch.
 `test_exclusive.py` covers exclusivity, eligibility and ranked preferences;
-`test_brands.py` runs brand learning on small synthetic cities.
+`test_brands.py` runs brand learning on small synthetic cities;
+`test_match.py` runs `match()` one condition, rung and assignment rule at a time.
 
 ## Turning it into a git submodule
 

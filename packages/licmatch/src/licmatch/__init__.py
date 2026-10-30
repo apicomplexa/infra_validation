@@ -11,6 +11,10 @@ and reads the result back; `score_matrix()` and `select()` never learn which
 register they were given.  That is the whole interface, and it is what lets the
 rule be reviewed, tested and re-used on its own.
 
+Since 1.2 the whole match -- candidates, scoring, named admission conditions,
+exclusive assignment, explanation -- is one pure function, `match(objects,
+register, policy)`, and a study's behaviour is a `Policy` value (`stages`).
+
     from licmatch import (DEFAULTS, home_city_re, parse_address_line,
                           parse_address_fields, side, score_matrix, select)
 
@@ -32,6 +36,7 @@ two floors rather than one, and what the result may and may not be read as -- is
 from __future__ import annotations
 
 from .geo import EARTH_R_M, haversine_m
+from .agree import VENUE_WORDS, agree_matrix, is_generic_name, latin, names_agree
 from .brands import BRAND_DEFAULTS, BrandParams, BrandResult, learn_brands
 from .names import (GENERIC_FASCIAS, RU_RETAIL_ALIASES, SHORT_NAME_MARKER,
                     TRADE_AND_LEGAL_NOISE, brand_key, fascia_name, holder_name,
@@ -41,13 +46,18 @@ from .scoring import (DEFAULTS, NAME_ALIAS, NAME_FUZZY, NAME_GENERIC, NAME_KINDS
                       SIDE_COLUMNS, MatchParams, Scores, accepted, pair_score,
                       score_matrix, side)
 from .select import PREFER_LIFT, Selection, claimed_keys, greedy_assign, select
+from .stages import (C_ADDRESS, C_ARCHIVED, C_BRAND, C_EXCLUSIVE, C_IN_FORCE, C_KIND,
+                     C_KIND_OR_HOLDER, C_NAME, C_NEAR, C_WRONG_KIND, ELSEWHERE, INACTIVE,
+                     NONE, OTHER_CHAIN, OTHER_HOLDER, OWN, RESULT_COLUMNS, STATUSES, TAKEN,
+                     WRONG_KIND, Archived, Brands, Entities, Exclusive, Kinds, MatchResult,
+                     Policy, Rung, Tally, match)
 from .text import fold, stem, stem_all, words
 from .toponym import (TYPE_TABLE, Toponym, address_score, home_city_re,
                       house_parts, house_similarity, parse_address_fields,
                       parse_address_line, settlement_name, street_similarity,
                       street_toponym)
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 __all__ = [
     "__version__",
@@ -67,6 +77,14 @@ __all__ = [
     "side", "SIDE_COLUMNS", "pair_score", "score_matrix", "accepted", "Scores",
     "select", "Selection", "claimed_keys", "greedy_assign", "PREFER_LIFT",
     "ROUTE_GEO", "ROUTE_ADDR", "ROUTE_NONE", "ROUTE_NAMES",
+    # the whole match as one pure function, in five stages (1.2)
+    "match", "MatchResult", "Policy", "Kinds", "Brands", "Archived", "Entities",
+    "Exclusive", "Rung", "Tally", "STATUSES", "RESULT_COLUMNS",
+    "OWN", "INACTIVE", "TAKEN", "OTHER_HOLDER", "OTHER_CHAIN", "WRONG_KIND",
+    "ELSEWHERE", "NONE", "C_ADDRESS", "C_NEAR", "C_KIND", "C_KIND_OR_HOLDER",
+    "C_IN_FORCE", "C_NAME", "C_BRAND", "C_ARCHIVED", "C_WRONG_KIND", "C_EXCLUSIVE",
+    # word-level name agreement (1.2)
+    "names_agree", "agree_matrix", "is_generic_name", "latin", "VENUE_WORDS",
     # primitives
     "haversine_m", "EARTH_R_M", "fold", "stem", "stem_all", "words",
 ]

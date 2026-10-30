@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "licmatch"
-version = "1.1.0"
+version = "1.2.0"
 description = "Address-level record linkage between an object export and a licence register (Russian addresses)"
 readme = "README.md"
 requires-python = ">=3.11"

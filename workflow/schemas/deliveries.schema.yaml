@@ -15,8 +15,8 @@ properties:
     description: The city as the export writes it (Архангельск, Северодвинск, ...)
   format:
     type: string
-    enum: [final_xlsx]
-    description: Input adapter (infracheck.inputs.<format>)
+    enum: [final_xlsx, v4_csv]
+    description: Input adapter (infracheck.inputs.final_xlsx / v4_csv)
   path:
     type: string
     description: The delivered file, relative to the repository root; read only
@@ -24,4 +24,11 @@ properties:
     type: string
     pattern: "^[0-9]+/[a-z-]+$"
     description: Yandex Maps region path of the city (20/arkhangelsk, 10849/severodvinsk)
-required: [delivery, category, city, format, path, yandex_region]
+  match_group:
+    type: string
+    pattern: "^[A-Za-z0-9_-]+$"
+    description: >-
+      Deliveries matched against the licence registry together, in row order
+      (the v4 join gives one outlet per shop across both risk layers: tobacco
+      first, then alcohol). A delivery alone is its own group.
+required: [delivery, category, city, format, path, yandex_region, match_group]

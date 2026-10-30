@@ -3,7 +3,7 @@
 #
 # One delivery file = one {delivery} (config/deliveries.tsv). Per delivery:
 #   objects -> one evidence file per check -> decide -> deliver (the XLSX copy);
-# then summary_all over every delivery. The main DAG is offline: the only
+# then one summary per category. The main DAG is offline: the only
 # network step, our own Yandex query, is the separate target `yandex_fetch`
 # (`pixi run yandex-fetch`), never part of `all`.
 from snakemake.utils import min_version
@@ -30,5 +30,4 @@ if config["notify"]["telegram"]:
 rule all:
     input:
         deliverables(),
-        "<results>/final_confirm_summary.txt",
-        "<results>/final_confirm_objects.csv",
+        category_summaries(),

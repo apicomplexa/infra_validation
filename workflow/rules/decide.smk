@@ -39,18 +39,21 @@ rule deliver:
         "../scripts/deliver.py"
 
 
-rule summary_all:
+rule summary_category:
+    # One category's summary blocks (in delivery-sheet order) and all its
+    # decided objects in one CSV; for catering these are the archive's
+    # final_confirm_summary.txt / final_confirm_objects.csv.
     input:
-        summaries=expand("<results>/{delivery}/summary.txt", delivery=DELIVERIES.index),
-        objects=expand("<results>/{delivery}/objects.parquet", delivery=DELIVERIES.index),
+        summaries=lambda wildcards: [f"<results>/{d}/summary.txt" for d in deliveries_of(wildcards.category)],
+        objects=lambda wildcards: [f"<results>/{d}/objects.parquet" for d in deliveries_of(wildcards.category)],
     output:
-        summary="<results>/final_confirm_summary.txt",
-        objects="<results>/final_confirm_objects.csv",
+        summary="<results>/{category}_summary.txt",
+        objects="<results>/{category}_objects.csv",
     log:
-        "<logs>/summary_all.log",
+        "<logs>/summary_category/{category}.log",
     conda:
         "../envs/default.yaml"
     params:
-        files=[Path(p).name for p in DELIVERIES["path"]],
+        files=lambda wildcards: [Path(DELIVERIES.loc[d, "path"]).name for d in deliveries_of(wildcards.category)],
     script:
-        "../scripts/summary_all.py"
+        "../scripts/summary_category.py"

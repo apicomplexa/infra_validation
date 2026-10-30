@@ -135,3 +135,75 @@ def objects(v4: pd.DataFrame) -> pd.DataFrame:
     out.index = pd.Index([f"V{i:05d}" for i in range(len(out))], name="object_id")
     obj.validate(out)
     return out
+
+
+# --------------------------------------------------------------------------
+# one CSV as a delivery: ObjectTable + RowMap
+# --------------------------------------------------------------------------
+RISK_OF_CATEGORY = {CATEGORY_ALCOHOL: RISK_ALCOHOL, CATEGORY_TOBACCO: RISK_TOBACCO}
+
+# Columns of the ObjectTable beyond the contract, produced here.
+ADAPTER_COLUMNS = ["entity", "types", "trade", "risk", "evidence", "brand_learn", "osm", "gis",
+                   "arkh_admin", "osm_urls", "gis_urls", "yandex_region", "yandex_contractor_rows"]
+
+
+def read_rows(path: Path | str) -> pd.DataFrame:
+    """The CSV as delivered (semicolon, UTF-8 with BOM): the deliverable's own columns."""
+    return pd.read_csv(path, sep=";", encoding="utf-8-sig", low_memory=False)
+
+
+def load_delivery(path: Path | str, delivery: str, yandex_region: str,
+                  category: str = "") -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """One v4 CSV -> (ObjectTable, RowMap, raw rows), as `final_xlsx.load` does for the XLSX.
+
+    A row is an object: no two rows of one file share a name and a coordinate,
+    and the licence join's own entity rule decides which records are one shop.
+    Everything the join reads (`name`, `address`, `trade`, `risk`,
+    `brand_learn`, ...) comes from `objects()`, so the join sees exactly what
+    the archive's did; the row order is the file's.
+
+    Two departures from `objects()`, neither read by the join:
+
+    * `generic` is the *directory* rule (`core.names.is_generic_directory`):
+      the final rule's extra tokens are catering words ("кофе", "шаурма"),
+      and the archive judged the v4 Yandex answers with the directory rule.
+    * `address` keeps the export's city prefix ("Архангельск, ..."): the join
+      drops it as a home city, the Yandex query strips it.
+
+    The provider flags are the contractor's `providers` column ("osm",
+    "2gis", "2gis+osm"); `matched_source_ids` also lists ids of the third
+    export a record was merged with, so it gives the record links of a
+    flagged provider, not the flags.
+    """
+    from infracheck.core import entities
+    from infracheck.core.names import is_generic_directory
+    from infracheck.inputs.final_xlsx import source_links
+
+    raw = read_rows(path)
+    cats = set(raw["category_orig"].dropna().astype(str))
+    if len(cats) != 1 or next(iter(cats)) not in RISK_OF_CATEGORY:
+        raise ValueError(f"{Path(path).name}: expected one v4 category_orig, found {sorted(cats)}")
+    risk = RISK_OF_CATEGORY[next(iter(cats))]
+    v4 = _load_one(path, risk)
+    v4["site_key"] = v4["latitude"].round(6).astype(str) + "|" + v4["longitude"].round(6).astype(str)
+    ob = objects(v4)
+    n = len(ob)
+    prov = v4["providers"].fillna("").astype(str)
+    links = [source_links(x) for x in v4["matched_source_ids"].fillna("").astype(str)]
+    osm = prov.str.contains("osm").to_numpy()
+    gis = prov.str.contains("2gis").to_numpy()
+    ob = ob.assign(
+        delivery=delivery, category=category,
+        generic=[is_generic_directory(v) for v in ob["name"]],
+        entity=np.arange(n), types=v4["type_orig"].fillna("").astype(str).to_numpy(),
+        evidence=v4["evidence"].to_numpy(), osm=osm, gis=gis, arkh_admin=False,
+        osm_urls=[" ".join(dict.fromkeys(o)) if f else "" for (o, _), f in zip(links, osm, strict=True)],
+        gis_urls=[" ".join(dict.fromkeys(g)) if f else "" for (_, g), f in zip(links, gis, strict=True)],
+        yandex_region=yandex_region, yandex_contractor_rows="[]")
+    ob.index = pd.Index([entities.object_id(delivery, e) for e in range(n)], name="object_id")
+    ob = ob[list(obj.COLUMNS) + ADAPTER_COLUMNS].astype(
+        {c: t for c, t in obj.COLUMNS.items() if c != "category"} | {"category": "string"})
+    obj.validate(ob)
+    rowmap = pd.DataFrame({"object_id": ob.index.to_numpy(), "entity": np.arange(n)},
+                          index=pd.RangeIndex(n, name="row"))
+    return ob, rowmap, raw

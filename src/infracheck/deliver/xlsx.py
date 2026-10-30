@@ -45,9 +45,8 @@ def legend(layout: Mapping, policies: Mapping[str, object], min_sources: int,
 
 
 def output_name(src: Path | str, layout: Mapping) -> str:
-    """`<original stem><suffix>.xlsx` -- the archive's `…_подтверждено.xlsx`."""
-    p = Path(src)
-    return f"{p.stem}{layout['suffix']}{p.suffix}"
+    """`<original stem><suffix>.xlsx` -- the archive's `…_подтверждено.xlsx`; a CSV becomes a workbook."""
+    return f"{Path(src).stem}{layout['suffix']}.xlsx"
 
 
 def _cell(v):
@@ -61,18 +60,37 @@ def _cell(v):
     return None if isinstance(v, str) and v == "" else v
 
 
+def workbook(sheet: pd.DataFrame, name: str) -> openpyxl.Workbook:
+    """A delivered table that came as CSV, as a one-sheet workbook to edit like the XLSX ones.
+
+    Header bold and frozen, cells as pandas read them ("" / NaN left empty).
+    """
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = name
+    ws.append([str(c) for c in sheet.columns])
+    for row in sheet.itertuples(index=False):
+        ws.append([None if (isinstance(v, float) and np.isnan(v)) else _cell(v) for v in row])
+    for c in ws[1]:
+        c.font = Font(bold=True)
+    ws.freeze_panes = "A2"
+    return wb
+
+
 def write(src: Path | str, dst: Path | str, rows: pd.DataFrame, columns: list[str],
           summary: list[tuple[str, object]], legend_rows: list[tuple[str, str]], layout: Mapping) -> None:
     """Copy `src` to `dst` with the front columns, the appended evidence and the legend.
 
     `rows` is the delivered sheet as read plus the decided columns, row-aligned
-    with the sheet; `columns` the sheet's own columns as pandas read them.  The
+    with the sheet; `columns` the sheet's own columns as pandas read them.  A
+    `src` that is not an XLSX (the v4 CSV) is first made a workbook of its own
+    columns (`workbook`), so the same insertion runs on it.  The
     header on the sheet is checked against `columns` and the row count against
     `rows`, which is what keeps the row order honest.
     """
     src, dst = Path(src), Path(dst)
     front, appended = layout["front"], layout["appended"]
-    wb = openpyxl.load_workbook(src)
+    wb = openpyxl.load_workbook(src) if src.suffix.lower() == ".xlsx" else workbook(rows[columns], layout["sheet"])
     ws = wb[layout["sheet"]]
     header = [c.value for c in ws[1]]
     if header != list(columns):

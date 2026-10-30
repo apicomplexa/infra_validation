@@ -48,14 +48,14 @@ categories:
     yandex_cache: final
 
     policy:
-      providers:
+      providers: &providers
         relink_m: 50.0
         relink_generic_m: 20.0
         name_min: 72.0
       arkh_admin:
         label: "Администрация"
         text: "в реестре (Arkh_admin = 1)"
-      export_name:
+      export_name: &export_name
         descriptor_label: "2GIS, описание в названии"
         bare_label: "название"
         separator: ","
@@ -68,13 +68,13 @@ categories:
         contractor_miss_text: "по адресу есть общепит, но с другим названием"
         label: "Яндекс"
         label_contractor_miss: "Яндекс (подрядчик)"
-      overture:
+      overture: &overture
         conf_min: 0.5
         name_min: 85.0
         near_m: 150.0
         generic_m: 60.0
         relink_m: 50.0
-      foursquare:
+      foursquare: &foursquare
         fresh: "2022-01-01"
         name_min: 85.0
         near_m: 150.0
@@ -89,7 +89,7 @@ categories:
         name_policy: required # the name must agree, always: malls, hotels, food courts
         name_fields: [holder, venue] # holder, or the venue the registry writes into the address
         unit: [street, house, venue] # one outlet = holder @ address @ named venue
-        params:
+        params: &licmatch_params
           w_addr: 0.50
           w_name: 0.20
           w_dist: 0.30
@@ -301,5 +301,359 @@ categories:
         counts: ["src_fsq", "(fsq_name != '') & ~src_fsq"]
       - {for: ["да", "нет", "противоречие", "автомат", "нет данных"], label: "Общепит? — {} (объектов)", count: "food == '{}'"}
       - {label: "Своя лицензия общепита в ЕГАИС (объектов)", count: "src_egais"}
+      - {label: "Подтверждено, но Яндекс пишет «закрыт»", count: "confirmed.astype(bool) & ya_closed"}
+      - {label: "Не запрошено, хотя вердикт зависит от Яндекса", count: "needs_yandex & (ya_status == '')"}
+
+  # ------------------------------------------------------------------------
+  # Alcohol (off-trade shops and on-trade bars / catering). Until the final
+  # alcohol XLSX arrives this runs on the fourth delivery's CSV (data/raw/v4,
+  # format v4_csv); the final file will be one more deliveries.tsv row.
+  # ------------------------------------------------------------------------
+  alcohol:
+    checks: [providers, export_name, yandex, overture, foursquare, egais]
+    yandex_cache: v4
+
+    policy:
+      providers: *providers
+      export_name: *export_name
+      yandex: &yandex_v4
+        near_m: 150.0
+        generic_m: 60.0
+        name_min: 72.0
+        contractor_status_found: "Найдено"
+        # The v4 CSV carries no contractor Yandex check; kept for the Policy.
+        contractor_miss_text: "по адресу есть организация, но с другим названием"
+        label: "Яндекс"
+        label_contractor_miss: "Яндекс (подрядчик)"
+      overture: *overture
+      foursquare: *foursquare
+      # The v4 join (checks/egais.py, mode v4): one outlet per shop across BOTH
+      # risk layers, so alcohol and tobacco share match_group "v4" in
+      # deliveries.tsv and are matched together. Members of a group must
+      # carry the same egais policy (the workflow checks it).
+      egais: &egais_v4
+        mode: v4
+        learn: true # fascia -> holder INN pairs learned from the alcohol layer
+        exclusive: true # one outlet per shop, both layers together
+        brand_rule: true # a known chain holds only its own holders' licences
+        params: *licmatch_params
+
+    existence:
+      min_sources: 2
+      count: {identity: [strong], record_state: [current]}
+      never_count: [export]
+      groups:
+        - {label: "OSM", column: src_osm, sources: [osm]}
+        - {label: "2GIS", column: src_gis, sources: [2gis]}
+        - {label: "Яндекс", column: src_yandex, sources: [yandex], checks: [yandex, yandex_contractor]}
+        - {label: "Overture", column: src_overture, sources: [overture]}
+        - {label: "Foursquare", column: src_fsq, sources: [fsq]}
+        # A licence counts only when it is the object's own, in force, and the
+        # name agrees (alias, a learned pair passing leave-one-out, or the
+        # names themselves); an own licence won on the address alone is weak
+        # and goes after « || » (checks/egais.py, `name_agrees`).
+        - {label: "ЕГАИС", column: src_egais, sources: [egais]}
+      exclude:
+        - {source: overture, only: [foursquare], ignore: [overture], sep: "|"}
+
+    reasons: &reasons_v4
+      pro_sep: " | "
+      group_sep: "; "
+      con_intro: " || против/не найдено: "
+      con_sep: "; "
+      no_sources: "источников нет"
+      con_order: [yandex, egais, overture, foursquare]
+
+    query: &query_v4
+      group: "Яндекс"
+      column: needs_yandex
+      skip_checks: []
+
+    how: &how_v4
+      column: yandex_how
+      sep: "; "
+      parts:
+        - check: yandex
+          key: yandex_status
+          texts:
+            present: "наша проверка: есть"
+            closed: "наша проверка: закрыт"
+            ambiguous: "наша проверка: не опознан"
+            absent: "наша проверка: нет"
+            error: "наша проверка: ошибка"
+
+    derived:
+      ya_closed: "ya_status == 'closed'"
+
+    # «Алкоголь?» -- does the object's own description say it sells or serves
+    # alcohol. A grocery or a café is neither yes nor no: it may, and the
+    # contractor's «Возможная …» tier is exactly that guess.
+    kind:
+      column: alcohol
+      reasons_column: alcohol_reasons
+      vote_identity: [strong]
+      votes:
+        - {scheme: ru_text, checks: [export_name], keep_empty: true}
+        - {scheme: yandex_rubric, label: "Яндекс, рубрика"}
+        - {scheme: fsq_category}
+        - {scheme: overture_category}
+        # The object's own licence in force (name agreeing: strong): the state
+        # licenses exactly this trade here.
+        - {scheme: egais_activity, label: "ЕГАИС, своя действующая лицензия", record_state: [current]}
+      words: {"yes": "да", "no": "нет", vending: "автомат", conflict: "противоречие", none: "нет данных"}
+      schemes:
+        # ORDER IS THE RULE: places that never sell alcohol first (a pharmacy
+        # tagged «алкоголь» is a false positive), then alcohol words, then
+        # trades unrelated to food and drink.
+        ru_text: &alcohol_ladder
+          lower: true
+          ladder:
+            - ["no", 'аптек|медицин|клиник|стоматолог|детск|школ|гимназ|колледж|храм|церк|собор']
+            - - "yes"
+              - 'алкогол|алко|вино|вина\b|винн|винот|винлаб|пиво|пив[нао]|разливн|крафт|бар\b|\bбар|паб\b|ликёр|ликер|виски|коньяк|водк|напитк|бристоль|красное.{0,3}белое|ароматный мир|ресторан|банкет|beer|wine|liquor|\bpub\b|\bbar\b'
+            - - "no"
+              - 'одежд|обув|цвет|книг|канцел|ремонт|салон|парикмах|банк(?!ет)|почт|оптик|ювелир|зоо|автозапчаст|шиномонтаж|автосервис|стройматериал|мебел|электроник|сотов|связь|офис|агентств|бюро'
+        yandex_rubric: *alcohol_ladder
+        fsq_category:
+          split: "|"
+          any_yes: 'Liquor|Wine|Beer|Brewery|Distillery|Winery|Bar\b|Pub|Night ?club|Lounge|Cocktail'
+          all_no_top: &fsq_not_shop [Health and Medicine, Community and Government, Business and Professional Services, Landmarks and Outdoors]
+        overture_category:
+          lower: false
+          ladder:
+            - ["yes", 'liquor|wine|beer|brewery|winery|distillery|\bbar\b|_bar|pub|night_club|lounge|cocktail']
+            - ["no", &overture_not_shop 'pharmacy|clinic|hospital|dentist|doctor|school|bank|clothing|shoe|beauty|hair|automotive|car_repair']
+        egais_activity:
+          ladder:
+            - ["yes", '.+']
+
+    deliver:
+      suffix: "_подтверждено"
+      sheet: data
+      legend_sheet: "Подтверждение"
+      front:
+        - {title: "Подтверждено", column: confirmed, width: 14}
+        - {title: "Основания", column: reasons, width: 70}
+        - {title: "Алкоголь?", column: alcohol, width: 14}
+      appended_width: 22
+      appended: &appended_v4
+        - ["Источников", n_sources]
+        - ["Источники", sources]
+        - ["Вид: основания", alcohol_reasons]
+        - ["Торговля (на вынос / на месте)", trade]
+        - ["Тип подрядчика (Direct / Inferred)", evidence]
+        - ["ЕГАИС: статус", licence_status]
+        - ["ЕГАИС: лицензия", licence_no]
+        - ["ЕГАИС: владелец", licence_org_name]
+        - ["ЕГАИС: имя совпало", licence_name_agrees]
+        - ["ЕГАИС: основание имени", licence_name_basis]
+        - ["ЕГАИС: адрес лицензии", licence_outlet_address]
+        - ["ЕГАИС: закреплена за", licence_claimed_by]
+        - ["Яндекс: как засчитан", yandex_how]
+        - ["Яндекс (наша): статус", ya_status]
+        - ["Яндекс (наша): название", ya_name]
+        - ["Яндекс (наша): адрес", ya_address]
+        - ["Яндекс (наша): карточка", ya_url]
+        - ["Яндекс (наша): расстояние, м", ya_distance_m]
+        - ["Яндекс (наша): рядом", ya_nearby]
+        - ["Яндекс (наша): запрос", ya_search_url]
+        - ["Яндекс (наша): дата", ya_checked]
+        - ["Связанная запись", link_note]
+        - ["Overture: название", ov_name]
+        - ["Overture: источник", ov_dataset]
+        - ["Overture: расстояние, м", ov_distance_m]
+        - ["Overture: пояснение", ov_note]
+        - ["Foursquare: название", fsq_name]
+        - ["Foursquare: обновлено", fsq_refreshed]
+        - ["Foursquare: расстояние, м", fsq_distance_m]
+        - ["Foursquare: пояснение", fsq_note]
+        - ["Объект №", entity]
+      legend:
+        - - "Подтверждено"
+          - "1 — о существовании объекта говорят не менее {min_sources_genitive} независимых источников; 0 — меньше {min_sources_genitive}."
+        - - "Основания"
+          - "По каждому засчитанному источнику — где найден объект: ссылка на запись OSM / карточку 2GIS, карточка Яндекса, место Overture / Foursquare, лицензия ЕГАИС. Источники разделены « | ». После « || против/не найдено:» — что искали и не нашли или нашли, но не засчитали."
+        - - "Что такое объект"
+          - "Одна строка выгрузки: в файле нет двух строк с тем же названием и координатой. Какие записи — один магазин, решает сверка с ЕГАИС (записи в пределах 50 м с одной вывеской)."
+        - - "Источники"
+          - "OSM, 2GIS (колонка providers выгрузки), Яндекс Карты (наша проверка), Overture Maps Places, Foursquare OS Places, собственная лицензия ЕГАИС. Яндекс засчитывается один раз."
+        - - "OSM / 2GIS"
+          - "Флаги колонки providers. Если у объекта нет провайдера, но в пределах {providers.relink_m:.0f} м ({providers.relink_generic_m:.0f} м для безымянной вывески) стоит запись другого провайдера с тем же именем, провайдер засчитывается — колонка «Связанная запись» называет эту запись."
+        - - "ЕГАИС"
+          - "Реестр лицензий ФСРАР (снимок 2026-07-01). Засчитывается только собственная действующая лицензия объекта, и только когда имя совпадает: известная сеть, выученная пара «вывеска → ИНН», прошедшая проверку без собственных адресов, или сходство названий. Лицензия, закреплённая за объектом лишь по адресу или при общей вывеске («Продукты»), не засчитывается и показана после « || ». Розница (на вынос) и общепит (на месте) лицензируются раздельно: лицензия должна разрешать торговлю объекта. Один магазин — одна точка лицензии, вместе со слоем табака."
+        - - "Яндекс: наша проверка"
+          - "Запрос «название, город, адрес» с картой по координате объекта. Есть — организация с похожим именем (сходство ≥ {yandex.name_min:.0f}) в пределах {yandex.near_m:.0f} м ({yandex.generic_m:.0f} м для общей вывески). Закрыт — «Больше не работает»; не засчитывается. Пусто — объект не запрашивался."
+        - - "Overture / Foursquare"
+          - "Место с похожим именем (сходство ≥ {overture.name_min:.0f}) в пределах {overture.near_m:.0f} м, уверенность Overture ≥ {overture.conf_min}; запись Foursquare — только обновлённая с {foursquare.fresh:.4} г. и не закрытая. Место Overture, собранное только из Foursquare, засчитывается как Foursquare."
+        - - "Алкоголь?"
+          - "Говорит ли описание объекта о продаже или подаче алкоголя: описание 2GIS в названии (или само название), рубрика Яндекса, категории Foursquare и Overture, собственная действующая лицензия ЕГАИС. да — все высказавшиеся за; нет — все против (аптека, одежда, ремонт…); противоречие — расходятся; нет данных — продуктовый магазин или кафе без других сведений: такие могут продавать алкоголь, но описание этого не говорит."
+        - - "Торговля"
+          - "off-trade — на вынос (магазин), on-trade — на месте (бар, общепит). Считайте их раздельно: реестр лицензирует их раздельно, и только на вынос сравнимо с числом магазинов."
+        - - "Чего нельзя утверждать"
+          - "Подтверждено = 1 говорит, что объект существует, а не что он продаёт алкоголь законно или сегодня. Карточка Яндекса — не лицензия. Подтверждено = 0 — очередь для ручной проверки, а не «объекта нет». Тип подрядчика Inferred («Возможная …») — догадка по виду объекта; прямые (Direct) и выведенные считайте отдельно."
+
+    combinations_title: "Источники объекта (комбинации):"
+    summary:
+      - {label: "Строк", value: rows}
+      - {label: "Объектов", value: objects}
+      - {label: "Подтверждено объектов", value: confirmed_objects}
+      - {for: [off-trade, on-trade], label: "Объектов, {}", count: "trade == '{}'"}
+      - {for: [off-trade, on-trade], label: "Подтверждено, {}", count: "confirmed.astype(bool) & (trade == '{}')"}
+      - {for: [Direct, Inferred], label: "Подтверждено, тип подрядчика {}", count: "confirmed.astype(bool) & (evidence == '{}')"}
+      - {label: "ЕГАИС засчитан (своя действующая, имя совпало)", count: "src_egais"}
+      - {label: "ЕГАИС: своя действующая лишь по адресу или общей вывеске (не засчитана)", count: "(licence_status == 'Active') & ~licence_name_agrees"}
+      - {for: [Active, Archived, Taken, Other chain, Other trade, Not in registry], label: "ЕГАИС, статус {}", count: "licence_status == '{}'"}
+      - {label: "Наша Яндекс-проверка: запрошено объектов", count: "ya_status != ''"}
+      - {for: [present, closed, ambiguous, absent, error], label: "   {}", count: "ya_status == '{}'"}
+      - {label: "Найдено в Overture (объектов)", count: "ov_match"}
+      - label: "Foursquare: засчитано / найдено, но старое или закрыто (объектов)"
+        counts: ["src_fsq", "(fsq_name != '') & ~src_fsq"]
+      - {for: ["да", "нет", "противоречие", "автомат", "нет данных"], label: "Алкоголь? — {} (объектов)", count: "alcohol == '{}'"}
+      - {for: [off-trade, on-trade], label: "Алкоголь? — да, {}", count: "(alcohol == 'да') & (trade == '{}')"}
+      - {label: "Подтверждено, но Яндекс пишет «закрыт»", count: "confirmed.astype(bool) & ya_closed"}
+      - {label: "Не запрошено, хотя вердикт зависит от Яндекса", count: "needs_yandex & (ya_status == '')"}
+
+  # ------------------------------------------------------------------------
+  # Tobacco. The registry has no tobacco class: ЕГАИС runs (the v4 join needs
+  # both layers together) but is no source here -- not a group, not a kind
+  # vote. Its alcohol licence is shown after « || » only, worded as what it
+  # is: an indirect hint, never a verification. Never sum it with a direct one.
+  # ------------------------------------------------------------------------
+  tobacco:
+    checks: [providers, export_name, yandex, overture, foursquare, egais]
+    yandex_cache: v4
+
+    policy:
+      providers: *providers
+      export_name: *export_name
+      yandex: *yandex_v4
+      overture: *overture
+      foursquare: *foursquare
+      egais: *egais_v4
+
+    existence:
+      min_sources: 2
+      count: {identity: [strong], record_state: [current]}
+      never_count: [export, egais]
+      groups:
+        - {label: "OSM", column: src_osm, sources: [osm]}
+        - {label: "2GIS", column: src_gis, sources: [2gis]}
+        - {label: "Яндекс", column: src_yandex, sources: [yandex], checks: [yandex, yandex_contractor]}
+        - {label: "Overture", column: src_overture, sources: [overture]}
+        - {label: "Foursquare", column: src_fsq, sources: [fsq]}
+      exclude:
+        - {source: overture, only: [foursquare], ignore: [overture], sep: "|"}
+
+    reasons: *reasons_v4
+    query: *query_v4
+    how: *how_v4
+    derived:
+      ya_closed: "ya_status == 'closed'"
+
+    kind:
+      column: tobacco
+      reasons_column: tobacco_reasons
+      vote_identity: [strong]
+      votes:
+        - {scheme: ru_text, checks: [export_name], keep_empty: true}
+        - {scheme: yandex_rubric, label: "Яндекс, рубрика"}
+        - {scheme: fsq_category}
+        - {scheme: overture_category}
+      words: {"yes": "да", "no": "нет", vending: "автомат", conflict: "противоречие", none: "нет данных"}
+      schemes:
+        # ORDER IS THE RULE: places that never sell tobacco first, then
+        # tobacco / nicotine words, then unrelated trades. A grocery or a
+        # kiosk may sell cigarettes and says nothing either way.
+        ru_text: &tobacco_ladder
+          lower: true
+          ladder:
+            - ["no", 'аптек|медицин|клиник|стоматолог|детск|школ|гимназ|колледж|храм|церк|собор']
+            - - "yes"
+              - 'табак|табач|сигар|сигарет|вейп|вейпшоп|vape|кальян|hookah|никотин|снюс|smoke|дым|tobacco|iqos|электронн\w* сигарет'
+            - - "no"
+              - 'одежд|обув|цвет|книг|канцел|ремонт|салон|парикмах|банк(?!ет)|почт|оптик|ювелир|зоо|автозапчаст|шиномонтаж|автосервис|стройматериал|мебел|электроник|сотов|связь|офис|агентств|бюро|ресторан|столов'
+        yandex_rubric: *tobacco_ladder
+        fsq_category:
+          split: "|"
+          any_yes: 'Tobacco|Smoke Shop|Vape|Hookah|Cigar'
+          all_no_top: *fsq_not_shop
+        overture_category:
+          lower: false
+          ladder:
+            - ["yes", 'tobacco|vape|hookah|smoke|cigar']
+            - ["no", *overture_not_shop]
+
+    deliver:
+      suffix: "_подтверждено"
+      sheet: data
+      legend_sheet: "Подтверждение"
+      front:
+        - {title: "Подтверждено", column: confirmed, width: 14}
+        - {title: "Основания", column: reasons, width: 70}
+        - {title: "Табак?", column: tobacco, width: 14}
+      appended_width: 22
+      appended:
+        - ["Источников", n_sources]
+        - ["Источники", sources]
+        - ["Вид: основания", tobacco_reasons]
+        - ["Тип подрядчика (Direct / Inferred)", evidence]
+        - ["Алкогольная лицензия: довод (не проверка табака)", licence_evidence]
+        - ["Алкогольная лицензия ЕГАИС", licence_no]
+        - ["ЕГАИС: владелец", licence_org_name]
+        - ["ЕГАИС: статус", licence_status]
+        - ["Яндекс: как засчитан", yandex_how]
+        - ["Яндекс (наша): статус", ya_status]
+        - ["Яндекс (наша): название", ya_name]
+        - ["Яндекс (наша): адрес", ya_address]
+        - ["Яндекс (наша): карточка", ya_url]
+        - ["Яндекс (наша): расстояние, м", ya_distance_m]
+        - ["Яндекс (наша): рядом", ya_nearby]
+        - ["Яндекс (наша): запрос", ya_search_url]
+        - ["Яндекс (наша): дата", ya_checked]
+        - ["Связанная запись", link_note]
+        - ["Overture: название", ov_name]
+        - ["Overture: источник", ov_dataset]
+        - ["Overture: расстояние, м", ov_distance_m]
+        - ["Overture: пояснение", ov_note]
+        - ["Foursquare: название", fsq_name]
+        - ["Foursquare: обновлено", fsq_refreshed]
+        - ["Foursquare: расстояние, м", fsq_distance_m]
+        - ["Foursquare: пояснение", fsq_note]
+        - ["Объект №", entity]
+      legend:
+        - - "Подтверждено"
+          - "1 — о существовании объекта говорят не менее {min_sources_genitive} независимых источников; 0 — меньше {min_sources_genitive}."
+        - - "Основания"
+          - "По каждому засчитанному источнику — где найден объект. После « || против/не найдено:» — что искали и не нашли или нашли, но не засчитали, в том числе алкогольная лицензия ЕГАИС."
+        - - "Источники"
+          - "OSM, 2GIS (колонка providers выгрузки), Яндекс Карты (наша проверка), Overture Maps Places, Foursquare OS Places. ЕГАИС источником не является: табачного реестра в нём нет."
+        - - "Алкогольная лицензия"
+          - "Если у объекта своя действующая розничная алкогольная лицензия (probable), это косвенный довод: алкоголь и табак продаются через один прилавок. Он не подтверждает ни существование объекта, ни продажу табака и не засчитывается. weak — своя лицензия архивная или нерозничная, довода нет. Не складывайте probable с прямыми подтверждениями алкоголя."
+        - - "OSM / 2GIS"
+          - "Флаги колонки providers. Соседняя запись другого провайдера с тем же именем в пределах {providers.relink_m:.0f} м ({providers.relink_generic_m:.0f} м для безымянной вывески) даёт провайдера — колонка «Связанная запись»."
+        - - "Яндекс: наша проверка"
+          - "Запрос «название, город, адрес» с картой по координате объекта; есть — организация с похожим именем (сходство ≥ {yandex.name_min:.0f}) в пределах {yandex.near_m:.0f} м ({yandex.generic_m:.0f} м для общей вывески). Пусто — объект не запрашивался."
+        - - "Overture / Foursquare"
+          - "Место с похожим именем (сходство ≥ {overture.name_min:.0f}) в пределах {overture.near_m:.0f} м, уверенность Overture ≥ {overture.conf_min}; запись Foursquare — только обновлённая с {foursquare.fresh:.4} г. и не закрытая."
+        - - "Табак?"
+          - "Говорит ли описание объекта о табаке или никотине: описание 2GIS в названии (или само название), рубрика Яндекса, категории Foursquare и Overture. Продуктовый магазин или киоск без других сведений — нет данных: сигареты там могут продаваться, но описание этого не говорит. Алкогольная лицензия в этом не участвует."
+        - - "Чего нельзя утверждать"
+          - "У слоя табака нет независимого эталона: Подтверждено = 1 говорит только, что объект существует, а не что в нём продают табак. Алкогольная лицензия не проверяет табачную метку. Тип подрядчика Inferred («Возможная …») — догадка по виду объекта; считайте Direct и Inferred раздельно."
+
+    combinations_title: "Источники объекта (комбинации):"
+    summary:
+      - {label: "Строк", value: rows}
+      - {label: "Объектов", value: objects}
+      - {label: "Подтверждено объектов", value: confirmed_objects}
+      - {for: [Direct, Inferred], label: "Объектов, тип подрядчика {}", count: "evidence == '{}'"}
+      - {for: [Direct, Inferred], label: "Подтверждено, тип подрядчика {}", count: "confirmed.astype(bool) & (evidence == '{}')"}
+      - {label: "Своя действующая розничная алкогольная лицензия (probable: косвенно, не проверка, не суммировать)", count: "licence_evidence == 'probable'"}
+      - {label: "Своя алкогольная лицензия архивная или нерозничная (weak)", count: "licence_evidence == 'weak'"}
+      - {label: "Наша Яндекс-проверка: запрошено объектов", count: "ya_status != ''"}
+      - {for: [present, closed, ambiguous, absent, error], label: "   {}", count: "ya_status == '{}'"}
+      - {label: "Найдено в Overture (объектов)", count: "ov_match"}
+      - label: "Foursquare: засчитано / найдено, но старое или закрыто (объектов)"
+        counts: ["src_fsq", "(fsq_name != '') & ~src_fsq"]
+      - {for: ["да", "нет", "противоречие", "автомат", "нет данных"], label: "Табак? — {} (объектов)", count: "tobacco == '{}'"}
       - {label: "Подтверждено, но Яндекс пишет «закрыт»", count: "confirmed.astype(bool) & ya_closed"}
       - {label: "Не запрошено, хотя вердикт зависит от Яндекса", count: "needs_yandex & (ya_status == '')"}

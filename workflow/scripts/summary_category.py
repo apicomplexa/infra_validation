@@ -1,4 +1,4 @@
-"""Rule `summary_all`: every delivery's summary block, and all decided objects in one CSV."""
+"""Rule `summary_category`: one category's summary blocks, and all its decided objects in one CSV."""
 
 import logging
 from pathlib import Path

@@ -79,14 +79,35 @@ use rule check_providers as check_foursquare with:
         policy=policy_cfg("foursquare"),
 
 
-use rule check_providers as check_egais with:
+rule egais_group:
+    # The registry join over every delivery of a match group at once: the v4
+    # rule gives one outlet to one shop across the alcohol and tobacco layers.
+    # A catering delivery is a group of its own.
+    input:
+        objects=group_objects,
+        resource="<temp>/egais/registry.tsv",
+    output:
+        "<temp>/egais/groups/{group}.parquet",
+    log:
+        "<logs>/egais_group/{group}.log",
+    conda:
+        "../envs/default.yaml"
+    params:
+        policy=group_policy,
+    script:
+        "../scripts/egais_group.py"
+
+
+rule check_egais:
+    # One delivery's rows of its group's join.
     input:
         objects="<temp>/{delivery}/objects.parquet",
-        resource="<temp>/egais/registry.tsv",
+        group=group_evidence,
     output:
         "<temp>/{delivery}/evidence/egais.parquet",
     log:
         "<logs>/check_egais/{delivery}.log",
-    params:
-        check="egais",
-        policy=policy_cfg("egais"),
+    conda:
+        "../envs/default.yaml"
+    script:
+        "../scripts/egais_split.py"

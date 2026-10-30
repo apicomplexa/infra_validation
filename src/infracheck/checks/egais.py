@@ -48,7 +48,8 @@ things about the registry govern the reading:
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field, replace
 
 import licmatch as lm
 import numpy as np
@@ -262,7 +263,7 @@ def run_catering(objects: pd.DataFrame, register: pd.DataFrame,
     return out
 
 
-def wide(evidence: pd.DataFrame) -> pd.DataFrame:
+def _wide_catering(evidence: pd.DataFrame) -> pd.DataFrame:
     """The archive's `final_egais.csv` columns, one row per object, from `run_catering`."""
     e = evidence[evidence["check"] == CHECK].set_index("object_id")
     out = pd.DataFrame(index=e.index)
@@ -428,19 +429,103 @@ class V4Result:
     match: lm.MatchResult
 
 
-def run_v4(v4_records: pd.DataFrame, register: pd.DataFrame,
-           policy: lm.Policy | None = None) -> V4Result:
-    """Which licence each v4 record holds -- the archive's `v4_licences.csv` columns.
+# How the name agreed, for the reader of «Основания».
+BASIS_RU = {lms.BASIS_MANUAL: "известная сеть", lms.BASIS_LEARNED: "выученная пара вывеска → ИНН",
+            lms.BASIS_FUZZY: "совпадает название"}
 
-    `v4_records` is `inputs.v4_csv.load()`'s frame (both layers stacked);
-    `register` is `registers.egais.to_register()` of the Arkhangelsk extract.
-    `licence_status` and the licence columns describe the licence *this record*
-    holds; `licence_n_*` / `licence_all_nos` describe the whole address.
+
+def name_agrees(ob: pd.DataFrame, register: pd.DataFrame, table: pd.DataFrame,
+                policy: lm.Policy, brands: lm.BrandResult | None) -> np.ndarray:
+    """Does the object's own licence agree with its name?  One bool per object.
+
+    The licence is the object's by the join's rules, but the join (`tiebreak`)
+    admits a licence on the address alone.  Its *identity* is strong only when
+    the name says the holder is this shop, as strictly as in catering:
+
+    * `manual` -- the holder is a known chain of the fascia (alias table);
+    * `learned` -- a learned fascia -> INN pair, and only one that survives
+      leave-one-out (`loo_accepted`) or a person accepted in the review: a pair
+      resting on all its voting addresses would confirm itself there;
+    * `fuzzy` -- the names compared as strings agree by `licmatch.names_agree`,
+      the word-level test the catering join requires;
+    * `generic` -- never: «Продукты» names no holder.
+
+    Rows without an own licence are False.
     """
-    from infracheck.inputs.v4_csv import objects as v4_objects
+    rec = table["record"].to_numpy(int)
+    hit = table["assigned"].to_numpy(bool)
+    basis = table["name_basis"].fillna("").astype(str).to_numpy()
+    aliases, sp = policy.aliases, policy.brands.spellings
+    good = set()
+    if brands is not None:
+        bt = brands.table
+        ok = bt["used"] & (bt["loo_accepted"] | (bt["review"] == lms.REVIEW_ACCEPT))
+        good = set(zip(bt.loc[ok, "fascia"], bt.loc[ok, "holder"], strict=True))
+    holders = register["holder_name"].astype(str).to_numpy()
+    inns = register["holder_id"].astype(str).to_numpy()
+    out = np.zeros(len(ob), dtype=bool)
+    for i, name in enumerate(ob["name"].fillna("").astype(str)):
+        if not hit[i]:
+            continue
+        b = basis[i]
+        if b == lms.BASIS_MANUAL:
+            out[i] = True
+        elif b == lms.BASIS_LEARNED:
+            key = lm.brand_key(lm.fascia_name(name, aliases=aliases))
+            out[i] = (sp.get(key, key), inns[rec[i]]) in good
+        elif b == lms.BASIS_FUZZY:
+            out[i] = lm.names_agree(lm.fascia_name(name, aliases=aliases),
+                                    lm.holder_name(holders[rec[i]], aliases=aliases), policy.place_words)
+    return out
 
+
+def _v4_text(st: str, risk: str, agrees: bool, basis: str, reg: pd.Series | None,
+             evidence_kind: str, claimed_by: str) -> str:
+    """The Russian clause of one v4 row: counted (own, name agrees) or after « || ».
+
+    A tobacco row speaks only when the object holds an alcohol licence of its
+    own, and says what that is *not*: the registry has no tobacco class, so the
+    licence never verifies a tobacco tag (`licence_evidence` probable / weak).
+    """
+    lic = (f"лицензия {reg['licence_no']} ({reg['status']}), {_short_holder(reg['org_name'])}, "
+           f"{reg['outlet_address']}") if reg is not None else ""
+    if risk != DIRECT_RISK:
+        if evidence_kind == EVIDENCE_PROBABLE:
+            return (f"у объекта своя действующая розничная алкогольная {lic} — косвенный довод: "
+                    "табачного реестра нет, продажу табака лицензия не подтверждает")
+        if evidence_kind == EVIDENCE_WEAK:
+            return f"своя алкогольная {lic} архивная или нерозничная — довода о табаке нет"
+        return ""
+    if st == lm.OWN:
+        if agrees:
+            return f"{lic}; имя: {BASIS_RU.get(basis, basis)}"
+        why = ("вывеска общая — владельца по ней не установить" if basis == lms.BASIS_GENERIC
+               else "имя владельца с вывеской не сходится")
+        return f"{lic} — закреплена по адресу, но {why}"
+    if st == lm.INACTIVE:
+        when = _fmt_date(reg["status_changed"]) if reg is not None else ""
+        return f"собственная {lic} не действует{' с ' + when if when else ''}"
+    if st == lm.TAKEN:
+        return f"лицензия по адресу закреплена за объектом «{claimed_by}»"
+    if st == lm.OTHER_CHAIN:
+        return "по адресу только лицензии другой сети"
+    if st == lm.WRONG_KIND:
+        return "по адресу только лицензии другой торговли (розница ↔ общепит)"
+    return "в реестре по адресу лицензий нет"
+
+
+def match_v4(ob: pd.DataFrame, register: pd.DataFrame, policy: lm.Policy | None = None
+             ) -> tuple[pd.DataFrame, pd.DataFrame, lm.MatchResult]:
+    """The v4 join over an ObjectTable: (fields, Evidence, MatchResult).
+
+    `ob` holds both risk layers together -- tobacco first, as the archive
+    stacked them, since ties break on the lower row -- with columns name,
+    address, lat, lon, city, `trade`, `risk` and `brand_learn`
+    (`inputs.v4_csv`).  `fields` is indexed like `ob` and carries the
+    archive's `MATCH_FIELDS` + `LICENCE_FIELDS`; the Evidence rows carry them
+    too, plus `licence_name_agrees`.
+    """
     policy = policy or v4_policy()
-    ob = v4_objects(v4_records)
     mr = lm.match(ob, register, policy)
     t = mr.table
     hit = t["assigned"].to_numpy(bool)
@@ -453,7 +538,7 @@ def run_v4(v4_records: pd.DataFrame, register: pd.DataFrame,
     def gather(col, dtype=np.float32):
         return np.where(hit, t[col].to_numpy(dtype), np.nan)
 
-    out = v4_records.reset_index(drop=True).copy()
+    out = pd.DataFrame(index=ob.index)
     out["licence_status"] = t["status"].map(V4_STATUS).to_numpy()
     out["licence_match_method"] = np.where(hit, t["method"].to_numpy(object), "")
     house = gather("house")
@@ -472,8 +557,8 @@ def run_v4(v4_records: pd.DataFrame, register: pd.DataFrame,
     for g in (GROUP_MATCHED, GROUP_ACTIVE, GROUP_ACTIVE_RETAIL):
         out[f"licence_n_{g}"] = t[f"n_{g}"].to_numpy(int)
 
-    names = out["name_orig"].fillna("").astype(str)
-    addrs = out["adress_orig"].fillna("").astype(str)
+    names = ob["name"].fillna("").astype(str).to_numpy()
+    addrs = ob["address"].fillna("").astype(str).to_numpy()
     pos = {k: i for i, k in enumerate(ob.index)}
     taken = (t["status"] == lm.TAKEN).to_numpy()
     out["licence_claimed_by"] = [f"{names[pos[c]]} ({addrs[pos[c]]})" if tk and c is not None else ""
@@ -482,7 +567,7 @@ def run_v4(v4_records: pd.DataFrame, register: pd.DataFrame,
         raise AssertionError("a Taken row with no rival -- the assignment is inconsistent")
     out["licence_claim_margin"] = np.round(t["margin"].to_numpy(float), 3)
 
-    risk = out["risk"].astype(str).to_numpy()
+    risk = ob["risk"].astype(str).to_numpy()
     kind = np.where(risk == DIRECT_RISK, EVIDENCE_DIRECT,
                     np.where(own_active_retail, EVIDENCE_PROBABLE, EVIDENCE_WEAK))
     out["licence_evidence"] = np.where(hit, kind, "")
@@ -494,29 +579,138 @@ def run_v4(v4_records: pd.DataFrame, register: pd.DataFrame,
         out[col] = np.where(hit, vals[pick], "")
     for col in _DATE_COLS:
         out[col] = pd.to_datetime(out[col], errors="coerce").dt.strftime("%Y-%m-%d").fillna("")
+    out = out[MATCH_FIELDS + list(LICENCE_FIELDS)]
+    # The terms are float32 (licmatch's matrices); widened as they are they
+    # print as 0.12300000339746475.  Their float32 decimal form is the number
+    # the archive wrote, so that is the float64 carried on.
+    for c in out.columns:
+        if out[c].dtype == np.float32:
+            out[c] = pd.to_numeric(out[c].astype(str))
 
-    # Evidence: what the licence says about the record, on the three axes.
+    agrees = name_agrees(ob, register, t, policy, mr.brand)
     rows = []
     for i, (oid, r) in enumerate(t.iterrows()):
         st = r["status"]
+        reg = register.iloc[rec[i]] if hit[i] else None
+        ident = IDENTITY[st]
+        if st in (lm.OWN, lm.INACTIVE) and not agrees[i]:
+            ident = "weak"
         row = {"object_id": str(oid), "check": CHECK, "source": SOURCE, "label": LABEL,
-               "identity": IDENTITY[st], "record_state": record_state(st, int(rec[i]), register),
-               "egais_status_code": st, "licence_status": out.at[i, "licence_status"],
-               "licence_evidence": out.at[i, "licence_evidence"]}
-        if hit[i]:
-            reg = register.iloc[rec[i]]
+               "identity": ident, "record_state": record_state(st, int(rec[i]), register),
+               "egais_status_code": st, "licence_name_agrees": bool(agrees[i]),
+               **out.iloc[i].to_dict(),
+               "text": _v4_text(st, risk[i], bool(agrees[i]), basis[i], reg,
+                                out["licence_evidence"].iat[i], out["licence_claimed_by"].iat[i])}
+        if reg is not None:
             row.update({"kind_text": reg["kind"], "kind_scheme": KIND_SCHEME,
                         "matched_name": _short_holder(reg["org_name"]),
                         "matched_address": reg["outlet_address"],
                         "distance_m": _num(r["distance"], 1), "name_score": _pct(r["name"]),
-                        "ref": reg["licence_no"],
-                        "text": f"лицензия {reg['licence_no']} ({reg['status']}), "
-                                f"{_short_holder(reg['org_name'])}, {reg['outlet_address']}"})
+                        "ref": reg["licence_no"]})
         rows.append(row)
+    return out, ev.make(rows), mr
+
+
+def run_v4(v4_records: pd.DataFrame, register: pd.DataFrame,
+           policy: lm.Policy | None = None) -> V4Result:
+    """Which licence each v4 record holds -- the archive's `v4_licences.csv` columns.
+
+    `v4_records` is `inputs.v4_csv.load()`'s frame (both layers stacked);
+    `register` is `registers.egais.to_register()` of the Arkhangelsk extract.
+    `licence_status` and the licence columns describe the licence *this record*
+    holds; `licence_n_*` / `licence_all_nos` describe the whole address.
+    """
+    from infracheck.inputs.v4_csv import objects as v4_objects
+
+    fields, evidence, mr = match_v4(v4_objects(v4_records), register, policy)
+    out = v4_records.reset_index(drop=True).copy()
+    for c in fields.columns:
+        out[c] = fields[c].to_numpy()
     return V4Result(table=out[list(v4_records.columns) + MATCH_FIELDS + list(LICENCE_FIELDS)],
-                    evidence=ev.make(rows), brands=mr.brand, match=mr)
+                    evidence=evidence, brands=mr.brand, match=mr)
 
 
-__all__ = ["catering_policy", "v4_policy", "run_catering", "wide", "run_v4", "V4Result",
+# --------------------------------------------------------------------------
+# the check interface: Policy, run, wide
+# --------------------------------------------------------------------------
+MODE_CATERING, MODE_V4 = "catering", "v4"
+
+
+@dataclass(frozen=True)
+class Policy:
+    """The registry join as configured: the mode's rule, its thresholds from config.
+
+    `mode` picks the rule -- `catering` (`catering_policy()`: own in-force
+    catering licence, the name always agreeing) or `v4` (`v4_policy()`: the
+    risk layers' join, both layers exclusive together).  The structural parts
+    of each (kinds, the explanation ladder, exclusivity, entities) are code.
+    `params` overrides fields of `licmatch.MatchParams`; the switches below,
+    left None, keep the mode's own value.  `learn` / `exclusive` /
+    `brand_rule` are the v4 rule's flags (the archive's --no-learn,
+    --no-exclusive, --no-brand-rule).
+    """
+
+    mode: str = MODE_CATERING
+    params: Mapping = field(default_factory=dict)
+    require_in_force: bool | None = None
+    name_policy: str | None = None
+    name_fields: tuple | None = None
+    unit: tuple | None = None
+    home_cities: tuple | None = None
+    learn: bool = True
+    exclusive: bool = True
+    brand_rule: bool = True
+
+    def licmatch(self) -> lm.Policy:
+        """The `licmatch.Policy` this configuration stands for."""
+        if self.mode == MODE_CATERING:
+            base = catering_policy()
+        elif self.mode == MODE_V4:
+            base = v4_policy(learn=self.learn, exclusive=self.exclusive, brand_rule=self.brand_rule)
+        else:
+            raise ValueError(f"egais mode {self.mode!r}: catering or v4")
+        over = {k: (tuple(v) if isinstance(v, list) else v)
+                for k in ("require_in_force", "name_policy", "name_fields", "unit", "home_cities")
+                if (v := getattr(self, k)) is not None}
+        return replace(base, params=replace(base.params, **dict(self.params)), **over)
+
+
+DEFAULT = Policy()
+
+
+def run(objects: pd.DataFrame, register: pd.DataFrame, policy: Policy = DEFAULT) -> pd.DataFrame:
+    """Evidence of the registry for every object, by the policy's mode.
+
+    For `v4` the objects of every delivery that compete for one outlet (both
+    risk layers) must be passed together: exclusivity is decided over the
+    whole call.
+    """
+    if policy.mode == MODE_V4:
+        return match_v4(objects, register, policy.licmatch())[1]
+    return run_catering(objects, register, policy.licmatch())
+
+
+def wide(evidence: pd.DataFrame, index: pd.Index | None = None) -> pd.DataFrame:
+    """The archive's columns, one row per object (reindexed to `index` if given).
+
+    Catering rows give `final_egais.csv`'s `egais_*`; v4 rows give
+    `v4_licences.csv`'s `MATCH_FIELDS` + `LICENCE_FIELDS` and `licence_name_agrees`.
+    """
+    e = evidence[evidence["check"] == CHECK]
+    if "licence_status" in e.columns:
+        w = e.set_index("object_id")[MATCH_FIELDS + list(LICENCE_FIELDS) + ["licence_name_agrees"]].copy()
+        if index is not None:
+            w = w.reindex(index)
+            w["licence_name_agrees"] = w["licence_name_agrees"].fillna(False).astype(bool)
+        return w
+    w = _wide_catering(evidence)
+    if index is not None:
+        w = w.reindex(index)
+        w["egais_match"] = w["egais_match"].fillna(False).astype(bool)
+    return w
+
+
+__all__ = ["Policy", "run", "wide", "catering_policy", "v4_policy", "run_catering", "run_v4",
+           "match_v4", "name_agrees", "V4Result",
            "split_address", "catering_note", "OUT_COLUMNS", "MATCH_FIELDS", "LICENCE_FIELDS",
            "CITIES", "PLACE_WORDS", "FASCIA_SPELLINGS", "BRAND_REVIEW"]

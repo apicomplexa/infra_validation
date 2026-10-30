@@ -108,6 +108,7 @@ class Vote:
     label: str = ""          # overrides the row's own label
     checks: tuple[str, ...] = ()
     keep_empty: bool = False  # vote even when kind_text is "" (the export's name)
+    record_state: tuple[str, ...] = ()  # only rows in these states vote (all if empty)
 
 
 @dataclass(frozen=True)
@@ -168,7 +169,8 @@ class Spec:
             column=kd["column"], reasons_column=kd["reasons_column"],
             vote_identity=tuple(kd["vote_identity"]),
             votes=tuple(Vote(scheme=v["scheme"], label=v.get("label", ""),
-                             checks=tuple(v.get("checks", [])), keep_empty=bool(v.get("keep_empty", False)))
+                             checks=tuple(v.get("checks", [])), keep_empty=bool(v.get("keep_empty", False)),
+                             record_state=tuple(v.get("record_state", [])))
                         for v in kd["votes"]),
             schemes=schemes, words=dict(kd["words"]), unknown=kd.get("unknown", "?"),
             sep=kd.get("sep", " | "))
@@ -350,6 +352,8 @@ def kind(ev: pd.DataFrame, index: pd.Index, spec: Spec) -> pd.DataFrame:
                 vd = d[d["kind_scheme"].eq(v.scheme)]
                 if v.checks:
                     vd = vd[vd["check"].isin(v.checks)]
+                if v.record_state:
+                    vd = vd[vd["record_state"].isin(v.record_state)]
                 for r in vd.itertuples():
                     if not r.kind_text and not v.keep_empty:
                         continue

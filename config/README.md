@@ -15,13 +15,14 @@ here — see `workflow/profiles/`.
 | Column | Description |
 |---|---|
 | `delivery` | Unique id (letters, digits, `_`, `-`); the `{delivery}` wildcard and the `object_id` prefix. |
-| `category` | Block of `categories:` that decides it (`catering`). |
+| `category` | Block of `categories:` that decides it (`catering`, `alcohol`, `tobacco`). |
 | `city` | The city as the export writes it; also picks the registry settlements to parse. |
-| `format` | Input adapter, `infracheck.inputs.<format>` (`final_xlsx`). |
+| `format` | Input adapter: `final_xlsx` (the final delivery's workbook) or `v4_csv` (one CSV of the fourth delivery; the deliverable is then a new workbook). |
 | `path` | The delivered file, relative to the repository root. Only read. |
 | `yandex_region` | Yandex Maps region path (`20/arkhangelsk`, `10849/severodvinsk`; Новодвинск goes through Arkhangelsk's). |
+| `match_group` | Deliveries matched against the licence registry together, in row order. The v4 join gives one outlet per shop across both risk layers, so `v4_tobacco` and `v4_alcohol` share group `v4` — tobacco first, as the archive stacked them (ties break on the lower row). A delivery alone is its own group (give its own id). All deliveries of a group must carry the same `policy.egais`. |
 
-Row order is the order of the combined summary.
+Row order is the order of each category's summary and of a match group. Outputs per category: `<results>/<category>_summary.txt` and `<results>/<category>_objects.csv`.
 
 ## `config.yaml` keys
 
@@ -45,17 +46,17 @@ category-specific code; `catering.py` only names its block.
 |---|---|---|
 | `checks` | workflow, rule | Checks run (one rule and one Evidence file each), in stacking order. |
 | `yandex_cache` | `check_yandex` | Which `resources.yandex_cache` entry our query reads. |
-| `policy.<check>` | the check | The fields of that check's `Policy` dataclass (`infracheck.checks.<check>.Policy`); an unknown key is an error. `policy.egais` is special: `mode` picks the check's rule (`catering`), `params` overrides `licmatch.MatchParams`, the rest are `licmatch.Policy` switches (`require_in_force`, `name_policy`, `name_fields`, `unit`, `home_cities`). |
+| `policy.<check>` | the check | The fields of that check's `Policy` dataclass (`infracheck.checks.<check>.Policy`); an unknown key is an error. For `egais`: `mode` (`catering` or `v4`: the rule's structure is the check's code), `params` (`licmatch.MatchParams`), the rule switches `require_in_force`, `name_policy`, `name_fields`, `unit`, `home_cities` (unset = the mode's own), and the v4 flags `learn`, `exclusive`, `brand_rule`. |
 | `existence.min_sources` | rule | «Подтверждено» = 1 at this many independent groups. |
 | `existence.count` | rule | The axes a row needs to count (`identity`, `record_state`). |
-| `existence.never_count` | rule | Sources that never count (the export's own name). |
+| `existence.never_count` | rule | Sources that never count (the export's own name; for tobacco also `egais`, which has no tobacco class). |
 | `existence.groups` | rule | Independence groups: `label` (in «Источники» / «Основания»), `column` (the `src_*` flag), `sources`, and optionally `checks` (clause order inside the group). |
 | `existence.exclude` | rule | Records an aggregator built only from another group's source: `source`, `only` (datasets), `ignore` (the aggregator's own name), `sep`. A row of `source` whose `origin` tokens, minus `ignore`, are all in `only` is dropped silently if it would have counted. |
 | `reasons.*` | rule | Separators, the « \|\| против/не найдено: » intro, the "no sources" text, and `con_order` (by check) of the not-counted clauses. |
 | `query` | `yandex_queue` | Which objects our own query could still decide: fewer than `min_sources` groups besides `group`, and no counted row of `skip_checks`; written as `column` of the decided table. |
 | `how` | rule | A "how was it reached" text (`yandex_how`): per check, the row field (`key`) whose value picks a text. |
 | `derived` | rule | Extra columns of the decided table, as Python expressions over its columns. |
-| `kind` | rule | «Вид?»: `column`, `reasons_column`, `vote_identity` (which identities vote), `votes` (scheme, label override, checks, `keep_empty`, in order), `words` (yes / no / vending / conflict / none), `schemes` (a `ladder` of `[role, regex]` read top down — **order is the rule** — or a `split` label list with `any_yes` / `all_no_top`). Quote `"yes"` / `"no"`: bare, YAML reads them as booleans. |
+| `kind` | rule | «Вид?»: `column`, `reasons_column`, `vote_identity` (which identities vote), `votes` (scheme, label override, checks, `keep_empty`, `record_state` — only rows in these states vote; in order), `words` (yes / no / vending / conflict / none), `schemes` (a `ladder` of `[role, regex]` read top down — **order is the rule** — or a `split` label list with `any_yes` / `all_no_top`). Quote `"yes"` / `"no"`: bare, YAML reads them as booleans. |
 | `deliver` | `deliver` | The XLSX: output `suffix`, `sheet`, `legend_sheet`, `front` columns (`write: false` writes the header only), `appended` `[title, column]` pairs, and `legend` texts. |
 | `deliver.legend` | `deliver` | `str.format` templates over the Policies used — `{providers.relink_m:.0f}`, `{foursquare.fresh:.4}` — plus `{min_sources}` and `{min_sources_genitive}`. No threshold is written out by hand. |
 | `summary`, `combinations_title` | `decide`, `deliver` | «Итоги» lines: a fixed `value` (`rows`, `objects`, `confirmed_objects`, `confirmed_rows`), a `count` (boolean expression over the decided table; `min_sources` is in scope), or `counts` (several, " / "-joined). `for: [...]` repeats a line, `{}` replaced by each item. |
@@ -71,3 +72,19 @@ Where the config reproduces the archive against the default rule
 Fixed on 2026-10-30 (`docs/changes/2026-10-30-overture-fsq-and-food-column.md`):
 the Foursquare-only Overture place no longer counts (`existence.exclude`), and
 «Общепит?» is written into the delivered sheet.
+
+## Categories on the fourth delivery
+
+`alcohol` and `tobacco` run on `data/raw/v4/` (format `v4_csv`) until the
+final XLSX arrive; those will be new rows with format `final_xlsx`. Their
+blocks share the catering thresholds through YAML anchors (`*providers`,
+`*overture`, ...). Two rules a reader of the config should know:
+
+- **Alcohol counts a licence only when the name agrees** — known chain,
+  a learned pair passing leave-one-out, or the names themselves; an own
+  licence won on the address alone is weak and shown after « || »
+  (`checks.egais.name_agrees`). «Алкоголь?» takes the own in-force licence as
+  a vote (`record_state: [current]`, strong only).
+- **Tobacco never counts the registry**, not for existence nor for «Табак?»;
+  the alcohol licence appears after « || » as an indirect hint (`probable`),
+  never summed with a direct confirmation.

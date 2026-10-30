@@ -152,7 +152,10 @@ $defs:
           egais:
             type: object
             properties:
-              mode: {type: string, enum: [catering]}
+              mode: {type: string, enum: [catering, v4]}
+              learn: {type: boolean}
+              exclusive: {type: boolean}
+              brand_rule: {type: boolean}
               require_in_force: {type: boolean}
               name_policy: {type: string, enum: [required, tiebreak]}
               name_fields: {type: array, items: {type: string, enum: [holder, venue]}, minItems: 1}
@@ -254,6 +257,7 @@ $defs:
                 label: {type: string}
                 checks: {$ref: "#/$defs/strings"}
                 keep_empty: {type: boolean}
+                record_state: {type: array, items: {enum: [current, stale, closed, inactive, unknown]}}
               required: [scheme]
               additionalProperties: false
           words:

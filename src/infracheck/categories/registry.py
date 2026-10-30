@@ -49,8 +49,6 @@ def module(check: str):
 def policy(check: str, cfg: Mapping | None):
     """The check's Policy dataclass from its config block (unknown keys raise)."""
     cfg = dict(cfg or {})
-    if check == "egais":
-        return egais_policy(cfg)
     cls = module(check).Policy
     names = {f.name for f in dataclasses.fields(cls)}
     unknown = set(cfg) - names
@@ -59,73 +57,79 @@ def policy(check: str, cfg: Mapping | None):
     return cls(**cfg)
 
 
-# `licmatch.Policy` fields a config block may set besides `params`: the scalar
-# switches of the rule.  The structural parts (kinds, the explanation ladder,
-# exclusivity) are the check's own code -- `checks.egais.catering_policy`.
-EGAIS_FIELDS = {"require_in_force", "name_policy", "name_fields", "unit", "home_cities"}
-
-
-def egais_policy(cfg: Mapping):
-    """The registry join's `licmatch.Policy`: the check's mode, thresholds from config.
-
-    `mode` picks the check's own Policy (`catering` -> `catering_policy()`);
-    `params` overrides fields of its `licmatch.MatchParams` (weights, both
-    floors, the radius); the keys of `EGAIS_FIELDS` override the rule's
-    switches.  Unknown keys raise.
-    """
-    mod = module("egais")
-    cfg = dict(cfg)
-    mode = cfg.pop("mode", "catering")
-    if mode != "catering":
-        raise NotImplementedError(f"egais mode {mode!r}: only catering is wired into the categories")
-    base = mod.catering_policy()
-    params = cfg.pop("params", {}) or {}
-    pnames = {f.name for f in dataclasses.fields(base.params)}
-    unknown = (set(params) - pnames) | (set(cfg) - EGAIS_FIELDS)
-    if unknown:
-        raise KeyError(f"egais: unknown policy key(s) {sorted(unknown)}")
-    over = {k: (tuple(v) if isinstance(v, list) else v) for k, v in cfg.items()}
-    return dataclasses.replace(base, params=dataclasses.replace(base.params, **params), **over)
-
-
 def policies(category: Mapping) -> dict[str, object]:
     """Every check's Policy for one category block of config.yaml."""
     return {c: policy(c, category.get("policy", {}).get(c)) for c in category["checks"]}
 
 
 def run(check: str, objects: pd.DataFrame, pol, resource: Path | str | None = None) -> pd.DataFrame:
-    """Evidence of one check for one delivery's ObjectTable."""
+    """Evidence of one check for one ObjectTable.
+
+    For `egais`, `resource` is the parsed extract and `objects` may be several
+    deliveries stacked (a match group, see `pipeline.egais_group`); the
+    register is cut to the objects' own settlements first.
+    """
     mod = module(check)
     if check == "yandex":
-        cache = mod.load_cache(resource) if resource else {}
+        cache = own_queries(objects, mod.load_cache(resource) if resource else {})
         ev = mod.run(objects, pol, cache=cache)
     elif check in ("overture", "foursquare"):
         ev = mod.run(objects, mod.load(resource), pol)
     elif check == "egais":
-        register = load_register(resource)
+        register = load_register(resource, settlements(objects))
         if register is None:
             raise FileNotFoundError(f"egais: no registry extract at {resource}")
-        ev = mod.run_catering(objects, register, pol)
+        ev = mod.run(objects, register, pol)
     else:
         ev = mod.run(objects, pol)
     evidence.validate(ev)
     return ev
 
 
-def load_register(path: Path | str | None) -> pd.DataFrame | None:
-    """The parsed registry extract as a licmatch RegisterTable (None when absent)."""
+def own_queries(objects: pd.DataFrame, cache: dict[str, dict]) -> dict[str, dict]:
+    """The cached answers to *each object's own* query.
+
+    The cache is keyed by `site_key`, and a v4 site key is the coordinate
+    alone: an alcohol and a tobacco record at one door share it, though only
+    one of them was queried, by its own name.  An answer counts for an object
+    only if its search URL is the one this object's query would read.
+    """
+    from infracheck.checks import yandex as y
+    out = {}
+    for _, r in objects.iterrows():
+        rec = cache.get(r["site_key"])
+        if rec is None:
+            continue
+        url = y.search_url(r["name"], r["address"], float(r["lat"]), float(r["lon"]), r["city"],
+                           r.get("yandex_region") or y.DEFAULT_REGION)
+        if rec.get("search_url") == url:
+            out[r["site_key"]] = rec
+    return out
+
+
+def settlements(objects: pd.DataFrame) -> set[str]:
+    """The registry settlement names of the objects' cities ("архангельск")."""
+    return {str(c).strip().lower() for c in objects["city"].unique() if str(c).strip()}
+
+
+def load_register(path: Path | str | None, keep: set[str] | None = None) -> pd.DataFrame | None:
+    """The parsed extract as a licmatch RegisterTable, cut to `keep` settlements (None when absent).
+
+    The cut is what the archive did by reading a one-city extract: the v4
+    join learns brands from base rates over the whole register it is given,
+    so rows of other cities are not neutral there.
+    """
     if not path or not Path(path).exists():
         return None
     from infracheck.registers import egais as reg
-    return reg.to_register(reg.load(path))
+    eg = reg.load(path)
+    if keep:
+        eg = eg[eg["outlet_settlement"].map(reg.settlement_name).isin(keep)].reset_index(drop=True)
+    return reg.to_register(eg)
 
 
 def wide(check: str, ev: pd.DataFrame, index: pd.Index) -> pd.DataFrame:
     """The check's archive-shaped columns for every object of `index`."""
-    if check == "egais":   # one row per object it was run on; no index argument
-        w = module(check).wide(ev).reindex(index)
-        w["egais_match"] = w["egais_match"].fillna(False).astype(bool)
-        return w
     return module(check).wide(ev, index)
 
 

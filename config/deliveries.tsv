@@ -1,4 +1,6 @@
-delivery	category	city	format	path	yandex_region
-final_arkhangelsk_catering	catering	Архангельск	final_xlsx	data/raw/final/infrastructure_архангельск_2026-10-22_yandex_2026-10-23_005502_общепит.xlsx	20/arkhangelsk
-final_novodvinsk_catering	catering	Новодвинск	final_xlsx	data/raw/final/infrastructure_новодвинск_2026-10-27_yandex_2026-10-27_142003_080672_общепит.xlsx	20/arkhangelsk
-final_severodvinsk_catering	catering	Северодвинск	final_xlsx	data/raw/final/infrastructure_северодвинск_2026-10-23_yandex_2026-10-23_115321_общепит.xlsx	10849/severodvinsk
+delivery	category	city	format	path	yandex_region	match_group
+final_arkhangelsk_catering	catering	Архангельск	final_xlsx	data/raw/final/infrastructure_архангельск_2026-10-22_yandex_2026-10-23_005502_общепит.xlsx	20/arkhangelsk	final_arkhangelsk_catering
+final_novodvinsk_catering	catering	Новодвинск	final_xlsx	data/raw/final/infrastructure_новодвинск_2026-10-27_yandex_2026-10-27_142003_080672_общепит.xlsx	20/arkhangelsk	final_novodvinsk_catering
+final_severodvinsk_catering	catering	Северодвинск	final_xlsx	data/raw/final/infrastructure_северодвинск_2026-10-23_yandex_2026-10-23_115321_общепит.xlsx	10849/severodvinsk	final_severodvinsk_catering
+v4_tobacco	tobacco	Архангельск	v4_csv	data/raw/v4/infrastructure_архангельск_2026-09-03_quality_excel табачное изделие.csv	20/arkhangelsk	v4
+v4_alcohol	alcohol	Архангельск	v4_csv	data/raw/v4/infrastructure_архангельск_2026-09-04_quality_excel алкоголь.csv	20/arkhangelsk	v4

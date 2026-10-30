@@ -14,21 +14,22 @@ import numpy as np
 import pandas as pd
 
 from infracheck.deliver import xlsx
-from infracheck.inputs import final_xlsx
+from infracheck.inputs import final_xlsx, v4_csv
 
 from . import base, registry
 from .base import Spec
 
-INPUTS = {"final_xlsx": final_xlsx}
+# format of deliveries.tsv -> (path, delivery, yandex_region, category) -> (ObjectTable, RowMap, raw rows)
+INPUTS = {"final_xlsx": final_xlsx.load, "v4_csv": v4_csv.load_delivery}
 
 
 def load(delivery: Mapping, root: Path | str = ".") -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """(ObjectTable, RowMap, raw rows) of one row of `deliveries.tsv`."""
-    mod = INPUTS.get(delivery["format"])
-    if mod is None:
+    load_fn = INPUTS.get(delivery["format"])
+    if load_fn is None:
         raise NotImplementedError(f"no input adapter for format {delivery['format']!r}")
-    return mod.load(Path(root) / delivery["path"], delivery["delivery"], delivery["yandex_region"],
-                    delivery["category"])
+    return load_fn(Path(root) / delivery["path"], delivery["delivery"], delivery["yandex_region"],
+                   delivery["category"])
 
 
 def resource(check: str, config: Mapping, category: Mapping, register: Path | str | None = None):
@@ -85,6 +86,22 @@ def decide(objects: pd.DataFrame, evs: Mapping[str, pd.DataFrame], spec: Spec) -
     """The decided object table (see `base.decide`), checks in `spec.checks` order."""
     evs = {c: evs[c] for c in spec.checks}
     return base.decide(objects, registry.stack(evs), registry.wide_all(evs, objects.index), spec)
+
+
+def egais_group(objects: list[pd.DataFrame], policy, register: Path | str) -> pd.DataFrame:
+    """The registry check over every delivery of one match group, stacked in order.
+
+    The v4 join gives one outlet to one shop across *both* risk layers, so
+    their deliveries are matched together and split afterwards
+    (`split_group`).  Order is the archive's -- tobacco first -- and it
+    matters: ties break on the lower row.
+    """
+    return registry.run("egais", pd.concat(objects), policy, register)
+
+
+def split_group(ev: pd.DataFrame, index: pd.Index) -> pd.DataFrame:
+    """The rows of a group's Evidence that belong to one delivery's objects."""
+    return ev[ev["object_id"].isin(index)].reset_index(drop=True)
 
 
 def summary_block(title: str, table: pd.DataFrame, rowmap: pd.DataFrame, spec: Spec) -> str:

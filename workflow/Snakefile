@@ -1,5 +1,11 @@
 # Entry point. Always run Snakemake from the repository root (`pixi run workflow`):
 # `configfile:` and all pathvars are resolved relative to the working directory.
+#
+# One delivery file = one {delivery} (config/deliveries.tsv). Per delivery:
+#   objects -> one evidence file per check -> decide -> deliver (the XLSX copy);
+# then summary_all over every delivery. The main DAG is offline: the only
+# network step, our own Yandex query, is the separate target `yandex_fetch`
+# (`pixi run yandex-fetch`), never part of `all`.
 from snakemake.utils import min_version
 
 min_version("9.19")
@@ -9,7 +15,11 @@ configfile: "config/config.yaml"
 
 
 include: "rules/common.smk"
-include: "rules/example.smk"
+include: "rules/objects.smk"
+include: "rules/registers.smk"
+include: "rules/checks.smk"
+include: "rules/decide.smk"
+include: "rules/yandex.smk"
 
 
 if config["notify"]["telegram"]:
@@ -19,4 +29,6 @@ if config["notify"]["telegram"]:
 
 rule all:
     input:
-        "<reports>/example_report.html",
+        deliverables(),
+        "<results>/final_confirm_summary.txt",
+        "<results>/final_confirm_objects.csv",

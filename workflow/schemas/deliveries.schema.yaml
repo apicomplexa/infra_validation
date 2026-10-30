@@ -1,0 +1,27 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+description: One row per delivery file in config/deliveries.tsv
+type: object
+properties:
+  delivery:
+    type: string
+    pattern: "^[A-Za-z0-9_-]+$"
+    description: Unique delivery id, used as the {delivery} wildcard and as the object_id prefix
+  category:
+    type: string
+    pattern: "^[a-z_]+$"
+    description: Block of `categories:` in config.yaml that decides this delivery
+  city:
+    type: string
+    description: The city as the export writes it (Архангельск, Северодвинск, ...)
+  format:
+    type: string
+    enum: [final_xlsx]
+    description: Input adapter (infracheck.inputs.<format>)
+  path:
+    type: string
+    description: The delivered file, relative to the repository root; read only
+  yandex_region:
+    type: string
+    pattern: "^[0-9]+/[a-z-]+$"
+    description: Yandex Maps region path of the city (20/arkhangelsk, 10849/severodvinsk)
+required: [delivery, category, city, format, path, yandex_region]

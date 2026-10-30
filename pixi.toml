@@ -34,12 +34,15 @@ infracheck = { path = ".", editable = true }
 licmatch = { path = "packages/licmatch", editable = true }
 
 [tasks]
-workflow = { cmd = "snakemake", description = "Run the workflow (extra args go to snakemake)" }
-dry-run = { cmd = "snakemake --dry-run", description = "Show what would be executed" }
+export-envs = { cmd = "pixi workspace export conda-environment workflow/envs/default.yaml", inputs = ["pixi.toml", "pixi.lock"], outputs = ["workflow/envs/default.yaml"], description = "Export the default env to workflow/envs/ (documents the rules' software; never deployed)" }
+workflow = { cmd = "snakemake", depends-on = ["export-envs"], description = "Run the workflow (extra args go to snakemake)" }
+dry-run = { cmd = "snakemake --dry-run", depends-on = ["export-envs"], description = "Show what would be executed" }
 unlock = { cmd = "snakemake --unlock", description = "Remove a stale Snakemake lock" }
+yandex-fetch = { cmd = "snakemake yandex_fetch --forcerun yandex_fetch", description = "Network: read the Yandex pages the verdicts still depend on into the cache (extra args go to snakemake, e.g. --config yandex_fetch='{limit: 20}')" }
+docs = { cmd = "quarto render docs/architecture.qmd --to html --output-dir results/docs && mv results/docs/docs/architecture.html results/docs/ && rmdir results/docs/docs", description = "Render docs/architecture.qmd into results/docs/" }
 dag = { cmd = "mkdir -p results/reports && snakemake --dry-run --dag --quiet | sed -n '/^digraph/,$p' | dot -Tpdf > results/reports/workflow-dag.pdf", description = "Render the job DAG" }
 test = { cmd = "pytest", description = "Unit and regression tests (tests/, packages/licmatch/tests)" }
 licmatch-test = { cmd = "python packages/licmatch/run_tests.py", description = "licmatch tests only (stdlib unittest)" }
 fmt = { cmd = "ruff format src packages workflow tests && ruff check --fix src packages workflow tests && snakefmt workflow", description = "Format Python and Snakemake code" }
-lint = { cmd = "ruff check src packages workflow tests && snakefmt --check workflow && snakemake --lint", description = "Lint everything (no changes)" }
+lint = { cmd = "ruff check src packages workflow tests && snakefmt --check workflow && snakemake --lint", depends-on = ["export-envs"], description = "Lint everything (no changes)" }
 hooks = { cmd = "pre-commit install", description = "Install git pre-commit hooks" }

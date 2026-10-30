@@ -2,15 +2,39 @@ $schema: "https://json-schema.org/draft/2020-12/schema"
 description: Schema for config/config.yaml. Extend it whenever you add a config key.
 type: object
 properties:
-  samples:
+  deliveries:
     type: string
-    description: Path to the sample sheet (TSV), see samples.schema.yaml
+    description: Path to the delivery sheet (TSV), see deliveries.schema.yaml
   pathvars:
     type: object
     description: Snakemake pathvars, used in rules as <name>
     additionalProperties:
       type: string
-    required: [results, logs, temp, reports, figures]
+    required: [results, logs, temp, reports, figures, resources]
+  resources:
+    type: object
+    properties:
+      egais_zip: {type: string, description: FSRAR licence registry ZIP (streamed, never unpacked)}
+      overture: {type: string, description: Overture Places snapshot (parquet)}
+      foursquare: {type: string, description: FSQ OS Places snapshot (parquet)}
+      yandex_cache:
+        type: object
+        description: Yandex answer caches (JSONL), by name; a category picks one
+        additionalProperties: {type: string}
+    required: [egais_zip, overture, foursquare, yandex_cache]
+    additionalProperties: false
+  yandex_fetch:
+    type: object
+    description: Options of `pixi run yandex-fetch` (network; never part of `all`)
+    properties:
+      limit: {type: integer, minimum: 0, default: 0, description: read at most N pages per delivery (0 = all)}
+      sleep:
+        type: array
+        items: {type: number, minimum: 0}
+        minItems: 2
+        maxItems: 2
+        default: [2.5, 4.5]
+    default: {limit: 0, sleep: [2.5, 4.5]}
   notify:
     type: object
     properties:
@@ -18,10 +42,266 @@ properties:
         type: boolean
         default: false
     default: {telegram: false}
-  example:
+  categories:
+    type: object
+    description: One block per category; see config/README.md
+    additionalProperties: {$ref: "#/$defs/category"}
+required: [deliveries, pathvars, resources, categories]
+
+$defs:
+  strings: {type: array, items: {type: string}}
+  regex_rule:
+    type: array
+    description: "[role, regex]: role is yes / no / vending"
+    prefixItems:
+      - {type: string, enum: ["yes", "no", "vending"]}
+      - {type: string}
+    minItems: 2
+    maxItems: 2
+  scheme:
     type: object
     properties:
-      n_features: {type: integer, minimum: 1}
-      seed: {type: integer}
-    required: [n_features, seed]
-required: [samples, pathvars]
+      lower: {type: boolean}
+      ladder: {type: array, items: {$ref: "#/$defs/regex_rule"}}
+      split: {type: string}
+      any_yes: {type: string}
+      all_no_top: {$ref: "#/$defs/strings"}
+      top_sep: {type: string}
+    additionalProperties: false
+  group:
+    type: object
+    properties:
+      label: {type: string}
+      column: {type: string, pattern: "^[a-z_]+$"}
+      sources: {$ref: "#/$defs/strings"}
+      checks: {$ref: "#/$defs/strings"}
+    required: [label, column, sources]
+    additionalProperties: false
+  summary_line:
+    type: object
+    properties:
+      label: {type: string}
+      value: {type: string, enum: [rows, objects, confirmed_objects, confirmed_rows]}
+      count: {type: string}
+      counts: {$ref: "#/$defs/strings"}
+      sep: {type: string}
+      for: {type: array}
+    required: [label]
+    additionalProperties: false
+  category:
+    type: object
+    properties:
+      checks:
+        type: array
+        items:
+          type: string
+          enum: [providers, arkh_admin, export_name, yandex, overture, foursquare, egais]
+        uniqueItems: true
+      yandex_cache: {type: string}
+      policy:
+        type: object
+        description: One block per check; keys are the fields of that check's Policy
+        properties:
+          providers:
+            type: object
+            properties:
+              relink_m: {type: number, exclusiveMinimum: 0}
+              relink_generic_m: {type: number, exclusiveMinimum: 0}
+              name_min: {type: number, minimum: 0, maximum: 100}
+            additionalProperties: false
+          arkh_admin:
+            type: object
+            properties: {label: {type: string}, text: {type: string}}
+            additionalProperties: false
+          export_name:
+            type: object
+            properties:
+              descriptor_label: {type: string}
+              bare_label: {type: string}
+              separator: {type: string, minLength: 1}
+            additionalProperties: false
+          yandex:
+            type: object
+            properties:
+              near_m: {type: number, exclusiveMinimum: 0}
+              generic_m: {type: number, exclusiveMinimum: 0}
+              name_min: {type: number, minimum: 0, maximum: 100}
+              contractor_status_found: {type: string}
+              contractor_miss_text: {type: string}
+              label: {type: string}
+              label_contractor_miss: {type: string}
+            additionalProperties: false
+          overture:
+            type: object
+            properties:
+              conf_min: {type: number, minimum: 0, maximum: 1}
+              name_min: {type: number, minimum: 0, maximum: 100}
+              near_m: {type: number, exclusiveMinimum: 0}
+              generic_m: {type: number, exclusiveMinimum: 0}
+              relink_m: {type: number, minimum: 0}
+            additionalProperties: false
+          foursquare:
+            type: object
+            properties:
+              fresh: {type: string, pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}
+              name_min: {type: number, minimum: 0, maximum: 100}
+              near_m: {type: number, exclusiveMinimum: 0}
+              generic_m: {type: number, exclusiveMinimum: 0}
+              relink_m: {type: number, minimum: 0}
+            additionalProperties: false
+          egais:
+            type: object
+            properties:
+              mode: {type: string, enum: [catering]}
+              require_in_force: {type: boolean}
+              name_policy: {type: string, enum: [required, tiebreak]}
+              name_fields: {type: array, items: {type: string, enum: [holder, venue]}, minItems: 1}
+              unit: {$ref: "#/$defs/strings"}
+              home_cities: {$ref: "#/$defs/strings"}
+              params:
+                type: object
+                description: licmatch.MatchParams fields
+                properties:
+                  w_addr: {type: number, minimum: 0}
+                  w_name: {type: number, minimum: 0}
+                  w_dist: {type: number, minimum: 0}
+                  max_m: {type: number, exclusiveMinimum: 0}
+                  accept: {type: number, minimum: 0, maximum: 1}
+                  addr_min: {type: number, minimum: 0, maximum: 1}
+                  addr_route_street: {type: number, minimum: 0, maximum: 1}
+                  addr_route_house: {type: number, minimum: 0, maximum: 1}
+                  strong: {type: number, minimum: 0, maximum: 1}
+                  neutral_generic: {type: boolean}
+                additionalProperties: false
+            additionalProperties: false
+        additionalProperties: false
+      existence:
+        type: object
+        properties:
+          min_sources: {type: integer, minimum: 1}
+          count:
+            type: object
+            properties:
+              identity: {type: array, items: {enum: [strong, weak, none]}}
+              record_state: {type: array, items: {enum: [current, stale, closed, inactive, unknown]}}
+            required: [identity, record_state]
+            additionalProperties: false
+          never_count: {$ref: "#/$defs/strings"}
+          sources_sep: {type: string}
+          groups: {type: array, items: {$ref: "#/$defs/group"}, minItems: 1}
+          exclude:
+            type: array
+            items:
+              type: object
+              properties: {source: {type: string}, origin: {type: string}}
+              required: [source, origin]
+              additionalProperties: false
+        required: [min_sources, count, groups]
+        additionalProperties: false
+      reasons:
+        type: object
+        properties:
+          pro_sep: {type: string}
+          group_sep: {type: string}
+          con_intro: {type: string}
+          con_sep: {type: string}
+          no_sources: {type: string}
+          con_order: {$ref: "#/$defs/strings"}
+        required: [pro_sep, group_sep, con_intro, con_sep, no_sources, con_order]
+        additionalProperties: false
+      query:
+        type: object
+        properties:
+          group: {type: string}
+          column: {type: string}
+          skip_checks: {$ref: "#/$defs/strings"}
+        required: [group, column]
+        additionalProperties: false
+      how:
+        type: object
+        properties:
+          column: {type: string}
+          sep: {type: string}
+          parts:
+            type: array
+            items:
+              type: object
+              properties:
+                check: {type: string}
+                key: {type: string}
+                texts: {type: object, additionalProperties: {type: string}}
+              required: [check, key, texts]
+              additionalProperties: false
+        required: [column, parts]
+        additionalProperties: false
+      derived: {type: object, additionalProperties: {type: string}}
+      kind:
+        type: object
+        properties:
+          column: {type: string}
+          reasons_column: {type: string}
+          vote_identity: {type: array, items: {enum: [strong, weak, none]}}
+          votes:
+            type: array
+            items:
+              type: object
+              properties:
+                scheme: {type: string}
+                label: {type: string}
+                checks: {$ref: "#/$defs/strings"}
+                keep_empty: {type: boolean}
+              required: [scheme]
+              additionalProperties: false
+          words:
+            type: object
+            properties:
+              "yes": {type: string}
+              "no": {type: string}
+              vending: {type: string}
+              conflict: {type: string}
+              none: {type: string}
+            required: ["yes", "no", vending, conflict, none]
+            additionalProperties: false
+          unknown: {type: string}
+          sep: {type: string}
+          schemes: {type: object, additionalProperties: {$ref: "#/$defs/scheme"}}
+        required: [column, reasons_column, vote_identity, votes, words, schemes]
+        additionalProperties: false
+      deliver:
+        type: object
+        properties:
+          suffix: {type: string}
+          sheet: {type: string}
+          legend_sheet: {type: string}
+          front:
+            type: array
+            items:
+              type: object
+              properties:
+                title: {type: string}
+                column: {type: string}
+                width: {type: number}
+                write: {type: boolean}
+              required: [title, column, width]
+              additionalProperties: false
+          appended_width: {type: number}
+          appended:
+            type: array
+            items:
+              type: array
+              prefixItems: [{type: string}, {type: string}]
+              minItems: 2
+              maxItems: 2
+          legend:
+            type: array
+            items:
+              type: array
+              prefixItems: [{type: string}, {type: string}]
+              minItems: 2
+              maxItems: 2
+        required: [suffix, sheet, legend_sheet, front, appended, legend]
+        additionalProperties: false
+      combinations_title: {type: string}
+      summary: {type: array, items: {$ref: "#/$defs/summary_line"}}
+    required: [checks, policy, existence, reasons, kind, deliver]
+    additionalProperties: false

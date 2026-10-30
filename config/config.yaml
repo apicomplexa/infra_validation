@@ -1,8 +1,11 @@
 # Analysis parameters — WHAT to analyse. Validated against
 # workflow/schemas/config.schema.yaml; keys are described in config/README.md.
-# HOW to run (cores, memory, conda, cluster) lives in workflow/profiles/.
+# HOW to run (cores, memory, cluster) lives in workflow/profiles/.
 
-samples: config/samples.tsv
+# One row per delivery file to check; validated against
+# workflow/schemas/deliveries.schema.yaml. Its `delivery` column is the
+# {delivery} wildcard, its `category` picks a block of `categories:` below.
+deliveries: config/deliveries.tsv
 
 # Snakemake pathvars: write "<results>/x.tsv" in rules instead of hard-coding
 # directories. Values may reference other pathvars.
@@ -15,10 +18,288 @@ pathvars:
   figures: <results>/figures
   logs: logs
 
+# Snapshots and caches the checks read. Read-only for the main DAG; only the
+# download tasks and `pixi run yandex-fetch` write here.
+resources:
+  egais_zip: resources/egais/data-20260701t0000-structure-20190918t0000.zip
+  overture: resources/overture/overture_places_2026-10-21.0.parquet
+  foursquare: resources/foursquare/fsq_places_2026-10-15.parquet
+  yandex_cache:
+    final: resources/cache/yandex/final_yandex_cache.jsonl
+    v4: resources/cache/yandex/v4_yandex_cache.jsonl
+
 notify:
   telegram: false # see workflow/rules/notify.smk
 
-# Parameters of the example module (workflow/rules/example.smk) — delete with it.
-example:
-  n_features: 50
-  seed: 42
+# --------------------------------------------------------------------------
+# Categories. Everything that changes a verdict lives here: every threshold of
+# every check (`policy`, one block per check, keys = the fields of that check's
+# Policy dataclass), the independence table, the counting rule, the clause
+# order of «Основания», the «Вид?» vocabulary and every Russian text of the
+# deliverable. src/infracheck/categories/base.py applies it and holds no
+# category-specific code.
+# --------------------------------------------------------------------------
+categories:
+  catering:
+    # Checks run for this category: one rule and one Evidence file each, and
+    # the order the evidence columns are built in.
+    checks: [providers, arkh_admin, export_name, yandex, overture, foursquare, egais]
+    # Which Yandex cache (key of resources.yandex_cache) our query reads.
+    yandex_cache: final
+
+    policy:
+      providers:
+        relink_m: 50.0
+        relink_generic_m: 20.0
+        name_min: 72.0
+      arkh_admin:
+        label: "Администрация"
+        text: "в реестре (Arkh_admin = 1)"
+      export_name:
+        descriptor_label: "2GIS, описание в названии"
+        bare_label: "название"
+        separator: ","
+      yandex:
+        near_m: 150.0
+        generic_m: 60.0
+        name_min: 72.0
+        contractor_status_found: "Найдено"
+        # Names the category's trade, so it is a category text.
+        contractor_miss_text: "по адресу есть общепит, но с другим названием"
+        label: "Яндекс"
+        label_contractor_miss: "Яндекс (подрядчик)"
+      overture:
+        conf_min: 0.5
+        name_min: 85.0
+        near_m: 150.0
+        generic_m: 60.0
+        relink_m: 50.0
+      foursquare:
+        fresh: "2022-01-01"
+        name_min: 85.0
+        near_m: 150.0
+        generic_m: 60.0
+        relink_m: 50.0
+      # The registry join (checks/egais.py -> licmatch.match). `mode` picks the
+      # check's rule (kinds, explanation ladder, exclusivity are its code);
+      # `params` are licmatch.MatchParams, the rest the rule's switches.
+      egais:
+        mode: catering
+        require_in_force: true
+        name_policy: required # the name must agree, always: malls, hotels, food courts
+        name_fields: [holder, venue] # holder, or the venue the registry writes into the address
+        unit: [street, house, venue] # one outlet = holder @ address @ named venue
+        params:
+          w_addr: 0.50
+          w_name: 0.20
+          w_dist: 0.30
+          max_m: 100.0
+          accept: 0.45
+          addr_min: 0.72 # the address floor: the neighbouring building fails here
+          addr_route_street: 0.90
+          addr_route_house: 0.85
+          strong: 0.75
+          neutral_generic: true
+
+    existence:
+      min_sources: 2
+      # The default rule of the three axes: this object, current.
+      count:
+        identity: [strong]
+        record_state: [current]
+      # Sources that never count for existence: the export's own name only
+      # describes the object's kind.
+      never_count: [export]
+      # Independence groups, in the order of «Источники» and «Основания».
+      # Yandex is one source however reached; its clause puts our own query
+      # before the contractor's hit (`checks`).
+      groups:
+        - {label: "OSM", column: src_osm, sources: [osm]}
+        - {label: "2GIS", column: src_gis, sources: [2gis]}
+        - {label: "Яндекс", column: src_yandex, sources: [yandex], checks: [yandex, yandex_contractor]}
+        - {label: "Overture", column: src_overture, sources: [overture]}
+        - {label: "Foursquare", column: src_fsq, sources: [fsq]}
+        - {label: "Администрация", column: src_arkh, sources: [arkh_admin]}
+        - {label: "ЕГАИС", column: src_egais, sources: [egais]}
+      # (source, origin) pairs that are another group's record. PARITY: the
+      # archive tested `ov_dataset.lower() == "foursquare"`, but Overture's
+      # `datasets` is always "Foursquare|Overture", so the rule never fired and
+      # the Foursquare-built Overture places count as Overture (21 objects). The exact,
+      # case-folded comparison keeps that (deviation, see config/README.md).
+      exclude:
+        - {source: overture, origin: foursquare}
+
+    reasons:
+      pro_sep: " | "
+      group_sep: "; "
+      con_intro: " || против/не найдено: "
+      con_sep: "; "
+      no_sources: "источников нет"
+      # Order of the not-counted clauses, by check.
+      con_order: [yandex_contractor, yandex, egais, overture, foursquare]
+
+    # Which objects our own Yandex query could still decide (`pixi run yandex-fetch`).
+    query:
+      group: "Яндекс"
+      column: needs_yandex
+      skip_checks: [yandex_contractor]
+
+    # «Яндекс: как засчитан».
+    how:
+      column: yandex_how
+      sep: "; "
+      parts:
+        - check: yandex_contractor
+          key: identity
+          texts: {strong: "подрядчик: имя совпало", weak: "подрядчик: только адрес+категория"}
+        - check: yandex
+          key: yandex_status
+          texts:
+            present: "наша проверка: есть"
+            closed: "наша проверка: закрыт"
+            ambiguous: "наша проверка: не опознан"
+            absent: "наша проверка: нет"
+            error: "наша проверка: ошибка"
+
+    # Extra columns of the decided table: Python expressions over its columns.
+    derived:
+      ya_closed: "ya_status == 'closed'"
+
+    # «Общепит?» -- is the object catering at all. Four descriptions of the
+    # object's kind, none of them the contractor's class.
+    kind:
+      column: food
+      reasons_column: food_reasons
+      # PARITY: the archive read the kind of every *found* FSQ / Overture
+      # record, including those another object won (`exclusive` -> weak). The
+      # three-axes default would be [strong] (deviation, see config/README.md).
+      vote_identity: [strong, weak]
+      votes: # order = order in «Общепит: основания»
+        - {scheme: ru_text, checks: [export_name], keep_empty: true}
+        - {scheme: yandex_rubric, label: "Яндекс, рубрика"}
+        - {scheme: fsq_category}
+        - {scheme: overture_category}
+      words: {"yes": "да", "no": "нет", vending: "автомат", conflict: "противоречие", none: "нет данных"}
+      schemes:
+        # ORDER IS THE RULE: vending first, then what names food without being
+        # a place to eat (wholesale, kitchen kit; «кафедра» starts with «кафе»),
+        # then catering words, then shop/company words. «Служба доставки» is
+        # neutral: in this class it is sushi and pizza.
+        ru_text: &ru_ladder
+          lower: true
+          ladder:
+            - [vending, 'автомат|кофемат|вендинг|кофемашин']
+            - ["no", 'оптом|оптов|оборудовани|кафедр|собор|храм|церк']
+            - - "yes"
+              - 'кафе(?!др)|кофе|ресторан|столов|\bбар|бар\b|паб\b|пекарн|кулинари|кондитерская|бистро|пиццер|бургер|шаурм|шаверм|суши|роллы|закусоч|буфет|фуд-?трак|чайхан|банкетн|доставки еды|быстрого питания|общественного питания|кейтеринг|гриль|рюмочн|пельмен|блин|чебуреч|трактир|харчевн|донер|хинкал|пирожк|кухня|гастро|лаундж|кальянн|таверн|шашлык|хот-?дог|банкет|coffee|cafe|pizza|grill|sushi|burger|bakery|kitchen|\bbar\b|\bpub\b'
+            - - "no"
+              - 'магазин|маркет|гипермаркет|компани|организаци|мастерская|студи|торговый дом|салон|\bцентр\b|клуб|склад|\bбаза\b|представительств|ателье|аптек|офис|агентств|бюро|фирма|завод|производств|оптов|бутик|отдел|ларёк|киоск печати|гостиниц|хостел|отель|школа|сервис|товары|продукты|продукция|курсы|мастер-класс'
+        # Yandex's rubric is Russian text read with the same ladder.
+        yandex_rubric: *ru_ladder
+        fsq_category:
+          split: "|"
+          any_yes: '^Dining and Drinking|Cafeteria|Restaurant|Caf[eé]|Bar\b'
+          all_no_top: [Retail, Business and Professional Services, Health and Medicine, Community and Government]
+          top_sep: " > "
+        overture_category:
+          lower: false
+          ladder:
+            - - "yes"
+              - 'restaurant|cafe|coffee|\bbar\b|_bar|pub|bakery|cafeteria|food|pizza|lounge|buffet|tea_room|bistro|diner|deli|brewery|canteen|dessert|ice_cream|caterer'
+            - - "no"
+              - 'store|shop|mall|market|company|service|office|agency|contractor|supplier|wholesale|repair|salon|school|bank|clinic|pharmacy'
+
+    # The deliverable: a copy of the delivered workbook.
+    deliver:
+      suffix: "_подтверждено"
+      sheet: data
+      legend_sheet: "Подтверждение"
+      # Columns put in front of the contractor's, in this order.
+      front:
+        - {title: "Подтверждено", column: confirmed, width: 14}
+        - {title: "Основания", column: reasons, width: 70}
+        # PARITY: the archive wrote this header but never its values (its
+        # write loop fills columns 1-2 only), so the column is empty in every
+        # delivered file. `write: true` fills it (deviation, see config/README.md).
+        - {title: "Общепит?", column: food, width: 14, write: false}
+      appended_width: 22
+      # Columns appended after the contractor's: [title, decided-table column].
+      appended:
+        - ["Источников", n_sources]
+        - ["Источники", sources]
+        - ["Общепит: основания", food_reasons]
+        - ["Яндекс: как засчитан", yandex_how]
+        - ["Яндекс (наша): статус", ya_status]
+        - ["Яндекс (наша): название", ya_name]
+        - ["Яндекс (наша): адрес", ya_address]
+        - ["Яндекс (наша): карточка", ya_url]
+        - ["Яндекс (наша): расстояние, м", ya_distance_m]
+        - ["Яндекс (наша): рядом", ya_nearby]
+        - ["Яндекс (наша): запрос", ya_search_url]
+        - ["Яндекс (наша): дата", ya_checked]
+        - ["Связанная запись", link_note]
+        - ["ЕГАИС: лицензия", egais_licence_no]
+        - ["ЕГАИС: владелец", egais_holder]
+        - ["ЕГАИС: пояснение", egais_note]
+        - ["Overture: название", ov_name]
+        - ["Overture: источник", ov_dataset]
+        - ["Overture: расстояние, м", ov_distance_m]
+        - ["Overture: пояснение", ov_note]
+        - ["Foursquare: название", fsq_name]
+        - ["Foursquare: обновлено", fsq_refreshed]
+        - ["Foursquare: расстояние, м", fsq_distance_m]
+        - ["Foursquare: пояснение", fsq_note]
+        - ["Объект №", entity]
+        - ["Строк у объекта", n_rows]
+      # «Как читать». Placeholders are str.format fields over the Policies
+      # actually used ({providers.relink_m:.0f}, {foursquare.fresh:.4}, ...),
+      # {min_sources} and {min_sources_genitive}; no threshold is written out.
+      legend:
+        - - "Подтверждено"
+          - "1 — о существовании объекта говорят не менее {min_sources_genitive} независимых источников; 0 — меньше {min_sources_genitive}."
+        - - "Основания"
+          - "По каждому засчитанному источнику — где найден объект: ссылка на запись OSM / карточку 2GIS, карточка Яндекса с адресом и способом проверки, соседняя запись, давшая провайдера, лицензия ЕГАИС. Источники разделены « | ». После « || против/не найдено:» — что искали и не нашли (куда копать дальше)."
+        - - "Что такое объект"
+          - "Одна вывеска в одной точке (название + координата). Выгрузка повторяет объект под каждым типом (кафе, ресторан, столовая…), поэтому источники считаются по объекту, а вердикт пишется во все его строки."
+        - - "Источники"
+          - "OSM, 2GIS, Яндекс Карты, реестр администрации (колонка Arkh_admin, когда заполнена), Overture Maps Places (Meta / AllThePlaces, без OSM), Foursquare OS Places, лицензия ЕГАИС на общепит у самого объекта (когда сверка с реестром выполнена). Яндекс засчитывается один раз, как бы он ни был получен."
+        - - "OSM / 2GIS"
+          - "Флаги OSM и GIS листа data, объединённые по строкам объекта. Если у объекта нет провайдера, но в пределах {providers.relink_m:.0f} м ({providers.relink_generic_m:.0f} м для безымянной вывески) стоит запись другого провайдера с тем же именем, провайдер засчитывается — это пропущенная подрядчиком склейка; колонка «Связанная запись» называет эту запись."
+        - - "Яндекс: подрядчик"
+          - "«Найдено» подрядчика означает совпадение адреса и категории, а не объекта. Оно засчитывается, только если одно из имён в «Яндекс: название» совпадает с именем объекта (сходство ≥ {yandex.name_min:.0f})."
+        - - "Яндекс: наша проверка"
+          - "Запрос «название, город, адрес» с картой по координате объекта. Есть — организация с похожим именем в пределах {yandex.near_m:.0f} м ({yandex.generic_m:.0f} м для безымянной вывески). Закрыт — Яндекс пишет «Больше не работает»; не засчитывается. Не опознан — по адресу кто-то есть, но безымянная вывеска не позволяет сказать кто. Пусто — объект не запрашивался (его вердикт не зависел от Яндекса)."
+        - - "ЕГАИС"
+          - "Реестр лицензий ФСРАР (снимок 2026-07-01). Засчитывается только действующая лицензия общепита у самого объекта: адрес проходит оба порога licmatch и имя совпадает с владельцем или с названием заведения в адресе лицензии. Один адрес без имени не засчитывается (ТЦ, гостиницы, фудкорты). Колонки «ЕГАИС: лицензия / владелец» у неподтверждённых объектов описывают лицензию, о которой говорит пояснение, — читайте «Подтверждено», а не наличие номера."
+        - - "Overture"
+          - "Открытый слой мест Overture Maps (снимок релиза в resources/overture). Засчитывается место с похожим (сходство ≥ {overture.name_min:.0f}) именем в пределах {overture.near_m:.0f} м ({overture.generic_m:.0f} м для безымянной вывески) и уверенностью Overture ≥ {overture.conf_min}. Записи Meta — страницы Facebook, в России не обновляются с 2022 г.: это слабее, чем сайт сети (AllThePlaces). Место Overture, собранное только из Foursquare, засчитывается как Foursquare, а не как второй источник. Одна запись Overture или Foursquare подтверждает одну точку: если на неё претендуют несколько объектов, она достаётся ближайшему и объектам в пределах {overture.relink_m:.0f} м от него (дубли выгрузки), остальным — нет (колонки «… пояснение»)."
+        - - "Foursquare"
+          - "Foursquare OS Places напрямую (снимок релиза в resources/foursquare). Сопоставление как у Overture (сходство имени ≥ {foursquare.name_min:.0f}). Засчитывается только запись, обновлённая с {foursquare.fresh:.4} г. и без даты закрытия: большинство записей по этим городам не обновлялось с 2013–2016 гг. и говорит лишь о том, что объект был тогда. Старые и закрытые совпадения показаны в «Основаниях» после « || » и в колонке «Foursquare: пояснение»."
+        - - "Общепит?"
+          - "Похож ли объект на общепит, по описаниям, которые не зависят от класса выгрузки: описание 2GIS после запятой в названии (или само название), рубрика Яндекса у той же карточки, категория Foursquare, категория Overture. да — все высказавшиеся источники за общепит; нет — все против (магазин, компания, проектная организация, опт, гостиница…); противоречие — источники расходятся (фирменный магазин пекарни, кафе при гостинице); автомат — кофейный или иной автомат; нет данных — по имени и источникам вид не определить. Это пометка для отбраковки, а не удаление: «нет» и «противоречие» стоит просмотреть, колонка «Общепит: основания» показывает, кто что сказал."
+        - - "Чего нельзя утверждать"
+          - "Подтверждено = 1 не означает, что объект работает сегодня и что он относится к этому типу. Подтверждено = 0 не означает, что объекта нет: это очередь для ручной проверки. Яндекс-проверка — снимок на дату в колонке."
+
+    # «Итоги» of the legend sheet and of the summary file. `count` is a
+    # boolean expression over the decided table (see config/README.md).
+    combinations_title: "Источники объекта (комбинации):"
+    summary:
+      - {label: "Строк", value: rows}
+      - {label: "Объектов (уникальных вывесок в точке)", value: objects}
+      - {label: "Подтверждено объектов", value: confirmed_objects}
+      - {label: "Подтверждено строк", value: confirmed_rows}
+      - {label: "— из них только OSM + 2GIS подрядчика", count: "osm & gis"}
+      - label: "— добавлено склейкой соседних записей"
+        count: "confirmed.astype(bool) & ~(osm & gis) & (osm_link | gis_link)"
+      - label: "— добавлено Яндексом"
+        count: "confirmed.astype(bool) & src_yandex & ((src_osm.astype(int) + src_gis.astype(int) + src_arkh.astype(int)) < min_sources)"
+      - {label: "«Найдено» подрядчика, отклонено по имени (объектов)", count: "ya_contractor_raw & ~ya_contractor"}
+      - {label: "Наша Яндекс-проверка: запрошено объектов", count: "ya_status != ''"}
+      - {for: [present, closed, ambiguous, absent, error], label: "   {}", count: "ya_status == '{}'"}
+      - {label: "Найдено в Overture (объектов)", count: "ov_match"}
+      - label: "Foursquare: засчитано / найдено, но старое или закрыто (объектов)"
+        counts: ["src_fsq", "(fsq_name != '') & ~src_fsq"]
+      - {for: ["да", "нет", "противоречие", "автомат", "нет данных"], label: "Общепит? — {} (объектов)", count: "food == '{}'"}
+      - {label: "Своя лицензия общепита в ЕГАИС (объектов)", count: "src_egais"}
+      - {label: "Подтверждено, но Яндекс пишет «закрыт»", count: "confirmed.astype(bool) & ya_closed"}
+      - {label: "Не запрошено, хотя вердикт зависит от Яндекса", count: "needs_yandex & (ya_status == '')"}

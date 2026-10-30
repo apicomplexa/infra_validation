@@ -23,6 +23,18 @@ asserted here object by object rather than tolerated:
 * «Общепит?» is filled: every data row carries its object's `food`, where
   the archive left the column empty.
 
+And for the two changes of 2026-10-30
+(docs/changes/2026-10-30-merged-objects-and-kind-votes.md):
+
+* a record another object won (`identity = weak`) no longer votes on
+  «Общепит?»: `food_reasons` loses exactly those clauses, on exactly the
+  objects that had one, and `food` moves only where the fold says so;
+* one sign recorded twice is one object: the new `merged` column is the
+  connected component of relink links, «Объект (склеен)» is appended to the
+  data sheet, and the «Итоги» count merged objects with the archive's record
+  counts in brackets -- every record count but the «Общепит?» ones (moved by
+  the vote change above) is the archive's.
+
 The registry extract is the golden one (`resources/golden/egais/`), which the
 `egais_register` rule reproduces (tests/regression/test_egais_parity.py);
 parsing the 10.9 GB ZIP here would cost six minutes and test nothing new.
@@ -30,12 +42,14 @@ parsing the 10.9 GB ZIP here would cost six minutes and test nothing new.
 from __future__ import annotations
 
 import io
+import re
 from pathlib import Path
 
 import openpyxl
 import pandas as pd
 import pytest
 import yaml
+from openpyxl.utils import get_column_letter
 
 from infracheck.categories import catering, pipeline, registry
 
@@ -74,6 +88,15 @@ FIX_OVERTURE = ["src_overture", "n_sources", "sources", "reasons"]
 FIX_OVERTURE_CELLS = ["Источников", "Источники", "Основания"]
 # Fix 2: the column the archive wrote the header of only.
 FOOD_CELL = "Общепит?"
+# 2026-10-30, weak records no longer vote on the kind.
+FIX_KIND = ["food", "food_reasons"]
+FIX_KIND_CELLS = ["Общепит?", "Общепит: основания"]
+KIND_CHANGED_REASONS = 11      # objects whose «Общепит: основания» lose a clause
+KIND_TRANSITIONS = {("да", "нет данных"): 1}
+WEAK_KIND_SCHEMES = ("fsq_category", "overture_category")
+# 2026-10-30, merged objects: (merged objects, confirmed merged) per file; the records are the archive's.
+MERGED = {"архангельск": (1066, 728), "северодвинск": (431, 337), "новодвинск": (75, 45)}
+MERGED_CELL = "Объект (склеен)"
 
 
 def _text(df: pd.DataFrame) -> pd.DataFrame:
@@ -102,7 +125,7 @@ def _run(config: dict, d: pd.Series, register: Path, out: Path) -> tuple[pd.Data
     table = pipeline.read_parquet(work / "decided.parquet")
     dst = work / Path(d["path"]).name.replace(".xlsx", "_подтверждено.xlsx")
     pipeline.deliver(ROOT / d["path"], dst, raw, rowmap, table, spec, pols)
-    return table.assign(file=Path(d["path"]).name), dst
+    return table.assign(file=Path(d["path"]).name, _evidence=[registry.stack(evs)] * len(table)), dst
 
 
 @pytest.fixture(scope="module")
@@ -113,7 +136,9 @@ def built(golden, tmp_path_factory):
     out = tmp_path_factory.mktemp("catering")
     register = golden / "egais" / "egais_licences_final.tsv"
     runs = [_run(config, d, register, out) for _, d in deliveries.iterrows()]
-    return pd.concat([t for t, _ in runs], ignore_index=True), [p for _, p in runs]
+    evs = pd.concat([t["_evidence"].iloc[0] for t, _ in runs], ignore_index=True)
+    tables = [t.drop(columns="_evidence").reset_index() for t, _ in runs]
+    return pd.concat(tables, ignore_index=True), [p for _, p in runs], evs
 
 
 @pytest.fixture(scope="module")
@@ -124,7 +149,7 @@ def gold(golden) -> pd.DataFrame:
 
 @pytest.fixture(scope="module")
 def mine(built, gold) -> pd.DataFrame:
-    table, _ = built
+    table, _, _ = built
     assert len(table) == len(gold) == 1688
     missing = [c for c in gold.columns if c not in table.columns]
     assert not missing, f"columns the pipeline does not produce: {missing}"
@@ -140,8 +165,8 @@ def _without_overture(reasons: str) -> str:
 
 @pytest.mark.golden
 def test_objects_parity(mine, gold):
-    """Every column but the four of fix 1 is exact, for every object."""
-    exact = [c for c in gold.columns if c not in FIX_OVERTURE]
+    """Every column but the four of fix 1 and the two of the kind vote is exact, for every object."""
+    exact = [c for c in gold.columns if c not in FIX_OVERTURE + FIX_KIND]
     bad = {c: int((gold[c] != mine[c]).sum()) for c in exact if (gold[c] != mine[c]).any()}
     assert not bad, f"columns with mismatches: {bad}"
 
@@ -162,41 +187,128 @@ def test_overture_fsq_only_fix(mine, gold):
     assert (m["n_sources"].astype(int) >= 2).all()
 
 
+def _weak_kind_clauses(evs: pd.DataFrame) -> dict[str, list[str]]:
+    """Per object (site_key), the «Общепит: основания» clause heads of its weak FSQ / Overture rows."""
+    w = evs[evs["identity"].eq("weak") & evs["kind_scheme"].isin(WEAK_KIND_SCHEMES) & evs["kind_text"].ne("")]
+    out: dict[str, list[str]] = {}
+    for r in w.itertuples():
+        out.setdefault(r.object_id, []).append(f"{r.label}: «{r.kind_text}» → ")
+    return out
+
+
+@pytest.mark.golden
+def test_weak_records_no_longer_vote_on_kind(built, mine, gold):
+    """«Общепит?» moves only by the weak clauses dropped; the fold of what is left decides."""
+    table, _, evs = built
+    weak = _weak_kind_clauses(evs)
+    key = dict(zip(table["object_id"], table["site_key"], strict=True))
+    weak_keys = {key[o]: heads for o, heads in weak.items()}
+    changed = gold["food_reasons"] != mine["food_reasons"]
+    assert int(changed.sum()) == KIND_CHANGED_REASONS
+    for i in gold.index:
+        heads = weak_keys.get(gold.at[i, "site_key"], [])
+        kept = [c for c in gold.at[i, "food_reasons"].split(" | ")
+                if c and not any(c.startswith(h) for h in heads)]
+        assert mine.at[i, "food_reasons"] == " | ".join(kept), gold.at[i, "site_key"]
+    moved = gold["food"] != mine["food"]
+    pairs = pd.Series(list(zip(gold.loc[moved, "food"], mine.loc[moved, "food"]))).value_counts().to_dict()
+    assert pairs == KIND_TRANSITIONS
+    assert not (moved & ~changed).any()
+
+
+@pytest.mark.golden
+def test_merged_objects(built):
+    """`merged` is the relink components; records of one merged object never disagree on «Подтверждено»."""
+    table, _, evs = built
+    for f, part in table.groupby("file"):
+        city = next(c for c in MERGED if c in f)
+        n, conf = MERGED[city]
+        assert part["merged"].nunique() == n, f
+        assert part.loc[part["confirmed"].astype(bool), "merged"].nunique() == conf, f
+        assert (part.groupby("merged")["confirmed"].nunique() == 1).all(), f
+        # The merged id is the lowest «Объект №» of the component.
+        assert (part.groupby("merged")["entity"].min() == part.groupby("merged")["entity"].min().index).all(), f
+    # Every relink link joins two records of one merged object, and no other records are joined.
+    rl = evs[evs["check"].eq("relink")]
+    m = table.set_index("object_id")["merged"]
+    assert (m[rl["object_id"]].to_numpy() == m[rl["relink_object"]].to_numpy()).all()
+    pairs = {tuple(sorted(p)) for p in zip(rl["object_id"], rl["relink_object"], strict=True)}
+    sizes = table.groupby(["file", "merged"]).size()
+    assert set(sizes) == {1, 2} and int((sizes == 2).sum()) == len(pairs) == 116
+
+
 def _legend(ws) -> tuple[list[tuple], list[tuple]]:
     rows = list(ws.iter_rows(values_only=True))
     cut = rows.index(("Итоги", None))
     return rows[:cut], rows[cut:]
 
 
+def _merged_line(label: str, gold_v, mine_v, n_merged: int, n_conf: int, food: pd.Series) -> None:
+    """One «Итоги» line: the archive's record count in brackets, the merged count before it."""
+    rec = f"{FOOD_CELL} — "
+    if label in ("Строк", "Подтверждено строк"):
+        assert mine_v == gold_v, label
+    elif label.startswith("Объектов"):
+        assert mine_v == f"{n_merged} (записей {gold_v})", label
+    elif label == "Подтверждено объектов":
+        records = str(gold_v).rsplit(" (", 1)[0]   # "803 из 1141 (70.4%)" -> "803 из 1141"
+        assert mine_v == f"{n_conf} из {n_merged} ({n_conf / n_merged:.1%}); записей {records}", label
+    else:
+        m = re.fullmatch(r"(\d+(?: / \d+)*) \(записей (.+)\)", str(mine_v))
+        assert m, (label, mine_v)
+        if label.startswith(rec):   # the kind vote moved these record counts
+            word = label[len(rec):].removesuffix(" (объектов)")
+            assert m.group(2) == str(int((food == word).sum())), label
+        else:
+            assert m.group(2) == str(gold_v), label
+        assert all(int(x) <= int(y) for x, y in zip(m.group(1).split(" / "), m.group(2).split(" / "),
+                                                    strict=True)), label
+
+
 @pytest.mark.golden
 def test_xlsx_parity(built, golden, gold):
-    """Data sheets: exact, except fix 1's three cells on its objects' rows and the filled food column."""
-    table, paths = built
+    """Data sheets: exact, except the cells the 2026-10-30 changes move, each checked against the decided value.
+
+    Fix 1's three cells on its objects' rows, the filled food column, «Общепит?» /
+    «Общепит: основания» where the kind vote moved them, and the appended
+    «Объект (склеен)»; the «Итоги» carry merged counts beside the archive's.
+    """
+    table, paths, _ = built
+    config = yaml.safe_load((ROOT / "config" / "config.yaml").read_text(encoding="utf-8"))
+    what_is = dict(config["categories"]["catering"]["deliver"]["legend"])["Что такое объект"]
     assert len(paths) == 3
     for mine_p in paths:
         gold_p = golden / "final_confirm" / mine_p.name
         gw, mw = openpyxl.load_workbook(gold_p), openpyxl.load_workbook(mine_p)
         assert gw.sheetnames == mw.sheetnames, mine_p.name
         gs, ms = gw["data"], mw["data"]
-        assert (gs.max_row, gs.max_column) == (ms.max_row, ms.max_column), mine_p.name
-        assert gs.auto_filter.ref == ms.auto_filter.ref and gs.freeze_panes == ms.freeze_panes
+        assert (gs.max_row, gs.max_column + 1) == (ms.max_row, ms.max_column), mine_p.name
+        last = get_column_letter(gs.max_column + 1)
+        assert ms.auto_filter.ref == f"A1:{last}{gs.max_row}" and gs.freeze_panes == ms.freeze_panes
         g_rows, m_rows = list(gs.iter_rows(values_only=True)), list(ms.iter_rows(values_only=True))
         header = list(g_rows[0])
-        assert list(m_rows[0]) == header, mine_p.name
-        col = {h: header.index(h) for h in [FOOD_CELL, "Объект №", *FIX_OVERTURE_CELLS]}
-        objs = table[table["file"] == mine_p.name.replace("_подтверждено.xlsx", ".xlsx")].reset_index(drop=True)
+        assert list(m_rows[0]) == [*header, MERGED_CELL], mine_p.name
+        col = {h: header.index(h) for h in [FOOD_CELL, "Объект №", *FIX_OVERTURE_CELLS, *FIX_KIND_CELLS]}
+        file = mine_p.name.replace("_подтверждено.xlsx", ".xlsx")
+        objs = table[table["file"] == file].reset_index(drop=True)
         fixed = set(objs.index[objs["site_key"].isin(OVERTURE_FSQ_ONLY)])
+        g_reasons = gold.set_index("site_key")["food_reasons"]
+        kind_moved = set(objs.index[objs["food_reasons"].to_numpy() != g_reasons[objs["site_key"]].to_numpy()])
         diffs, food_rows = [], 0
         for i, (gr, mr) in enumerate(zip(g_rows[1:], m_rows[1:], strict=True), start=2):
             entity = gr[col["Объект №"]]
             assert gr[col[FOOD_CELL]] is None, "the archive's food column is empty"
             assert mr[col[FOOD_CELL]] == objs.at[entity, "food"] and mr[col[FOOD_CELL]], (mine_p.name, i)
+            assert mr[-1] == objs.at[entity, "merged"], (mine_p.name, i)
             food_rows += 1
             if entity in fixed:   # fix 1's cells carry the decided values of the object
                 assert [mr[col[h]] for h in FIX_OVERTURE_CELLS] == [
                     int(objs.at[entity, "n_sources"]), objs.at[entity, "sources"], objs.at[entity, "reasons"]]
-            for j, (a, b) in enumerate(zip(gr, mr, strict=True)):
-                if j == col[FOOD_CELL] or (entity in fixed and header[j] in FIX_OVERTURE_CELLS):
+            if entity in kind_moved:
+                assert mr[col["Общепит: основания"]] == (objs.at[entity, "food_reasons"] or None)
+            for j, (a, b) in enumerate(zip(gr, mr[:-1], strict=True)):
+                if (j == col[FOOD_CELL] or (entity in fixed and header[j] in FIX_OVERTURE_CELLS)
+                        or (entity in kind_moved and header[j] == "Общепит: основания")):
                     continue
                 if a != b:
                     diffs.append((i, header[j], a, b))
@@ -204,7 +316,10 @@ def test_xlsx_parity(built, golden, gold):
         assert food_rows == len(g_rows) - 1
         g_how, g_sum = _legend(gw["Подтверждение"])
         m_how, m_sum = _legend(mw["Подтверждение"])
-        assert g_sum == m_sum, mine_p.name
+        assert [k for k, _ in g_sum] == [k for k, _ in m_sum], mine_p.name
+        city = next(c for c in MERGED if c in file)
+        for (label, gv), (_, mv) in zip(g_sum[1:], m_sum[1:], strict=True):
+            _merged_line(label, gv, mv, *MERGED[city], objs["food"])
 
         def moved(v):
             if not isinstance(v, str):
@@ -212,4 +327,6 @@ def test_xlsx_parity(built, golden, gold):
             for old, new in LEGEND_PATHS.items():
                 v = v.replace(old, new)
             return v
-        assert [tuple(moved(v) for v in r) for r in g_how] == m_how, mine_p.name
+        g_how = [tuple(moved(v) for v in r) for r in g_how]
+        assert [r for r in g_how if r[0] != "Что такое объект"] == [r for r in m_how if r[0] != "Что такое объект"]
+        assert ("Что такое объект", what_is) in m_how, mine_p.name

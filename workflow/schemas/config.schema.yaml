@@ -77,6 +77,13 @@ $defs:
       checks: {$ref: "#/$defs/strings"}
     required: [label, column, sources]
     additionalProperties: false
+  evidence_field:
+    type: object
+    properties:
+      check: {type: string}
+      field: {type: string}
+    required: [check, field]
+    additionalProperties: false
   summary_line:
     type: object
     properties:
@@ -242,6 +249,17 @@ $defs:
         required: [column, parts]
         additionalProperties: false
       derived: {type: object, additionalProperties: {type: string}}
+      merge:
+        description: "Records of one sign merged into one object for counting (categories/base.py, merged)"
+        type: object
+        properties:
+          column: {type: string, pattern: "^[a-z_]+$"}
+          pairs: {type: array, items: {$ref: "#/$defs/evidence_field"}}
+          shared: {type: array, items: {$ref: "#/$defs/evidence_field"}}
+          disagree: {type: string}
+          records_word: {type: string}
+        required: [column]
+        additionalProperties: false
       kind:
         type: object
         properties:

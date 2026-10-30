@@ -87,7 +87,7 @@ def test_fold_votes(roles, verdict):
 def test_kind_reasons_text(spec):
     e = ev({"object_id": "a", "check": "export_name", "source": "export", "kind_text": "кофейня",
             "kind_scheme": "ru_text", "label": "2GIS, описание в названии"},
-           {"object_id": "a", "check": "foursquare", "source": "fsq", "identity": "weak", "kind_text": "Retail > Shop",
+           {"object_id": "a", "check": "foursquare", "source": "fsq", "kind_text": "Retail > Shop",
             "kind_scheme": "fsq_category", "label": "Foursquare"})
     k = base.kind(e, IDX, spec)
     assert k.loc["a", "food"] == "противоречие"
@@ -96,8 +96,43 @@ def test_kind_reasons_text(spec):
     assert k.loc["b", "food"] == "нет данных"
 
 
+def test_weak_record_casts_no_kind_vote(spec):
+    """Since 2026-10-30: a record another object won (weak) says nothing about this one's kind."""
+    assert spec.kind.vote_identity == ("strong",)
+    e = ev({"object_id": "a", "check": "export_name", "source": "export", "kind_text": "кофейня",
+            "kind_scheme": "ru_text", "label": "2GIS, описание в названии"},
+           {"object_id": "a", "check": "foursquare", "source": "fsq", "identity": "weak", "kind_text": "Retail > Shop",
+            "kind_scheme": "fsq_category", "label": "Foursquare"})
+    k = base.kind(e, IDX, spec)
+    assert k.loc["a", "food"] == "да"
+    assert k.loc["a", "food_reasons"] == "2GIS, описание в названии: «кофейня» → да"
+
+
 def test_needs_query_skips_contractor_hit(spec):
     e = ev({"object_id": "a", "check": "yandex_contractor", "source": "yandex", "label": "Яндекс", "text": "c"},
            {"object_id": "b", "check": "providers", "source": "osm", "label": "OSM", "text": "x"})
     q = base.needs_query(e, IDX, spec)
     assert not q["a"] and q["b"]
+
+
+def test_merged_components_and_summary(spec):
+    """Relink twins are one object: chains merge, the lowest entity names it, counts are by merged object."""
+    idx = pd.Index(["a", "b", "c", "d"], name="object_id")
+    objects = pd.DataFrame({"entity": [3, 1, 2, 0]}, index=idx)
+    e = ev({"object_id": "a", "check": "relink", "source": "osm", "relink_object": "b"},
+           {"object_id": "c", "check": "relink", "source": "2gis", "relink_object": "b"},
+           {"object_id": "b", "check": "relink", "source": "2gis", "relink_object": "a"})
+    m = base.merged(e, objects, spec)
+    assert m.to_dict() == {"a": 1, "b": 1, "c": 1, "d": 0}
+    table = pd.DataFrame({"merged": m, "confirmed": [1, 1, 1, 0], "sources": ["OSM", "OSM", "OSM", ""]}
+                         | {g.column: False for g in spec.groups}, index=idx)
+    table["src_osm"] = [True, True, True, False]
+    assert base.disagreeing(table, spec) == 0
+    assert base._value({"value": "objects"}, table, table, spec) == "2 (записей 4)"
+    assert base._value({"value": "confirmed_objects"}, table, table, spec) == "1 из 2 (50.0%); записей 3 из 4"
+    assert base._value({"count": "src_osm"}, table, table, spec) == "1 (записей 3)"
+    assert base.combinations(table, spec).to_dict() == {"OSM": 1, "—": 1}
+    table.loc["c", "confirmed"] = 0
+    assert base.disagreeing(table, spec) == 1
+    assert base._value({"value": "confirmed_objects"}, table, table, spec).endswith(
+        "; у 1 склеенных объектов записи расходятся")

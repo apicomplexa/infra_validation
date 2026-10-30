@@ -105,6 +105,7 @@ def test_relink_pairs_twin_within_limit():
     assert set(ev["check"]) == {"providers", "relink"}
     rl = ev[ev["check"] == "relink"]
     assert list(rl["object_id"]) == ["a"] and rl.iloc[0]["text"].startswith("соседняя запись «1234, кофейня»")
+    assert rl.iloc[0]["relink_object"] == "b"  # the twin: merged with "a" when objects are counted
     w = providers.wide(ev, objs.index)
     assert w.loc["a", "link_note"] == "2GIS из записи «1234, кофейня» (11 м)"
     assert w.loc["b", "osm_urls"] == "" and w.loc["a", "osm_urls"] == "u"

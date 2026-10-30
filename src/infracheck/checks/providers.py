@@ -48,12 +48,15 @@ def relink(ob: pd.DataFrame, policy: Policy = DEFAULT) -> pd.DataFrame:
     both sides are records of the same export and neither is the "directory".
     Within one city only; nearest qualifying twin wins.  Returns `ob` with
     `osm_link`, `gis_link`, `link_note`, `osm_link_from`, `gis_link_from`
-    (and the metres, `osm_link_m` / `gis_link_m`, and twin's name,
-    `osm_link_name` / `gis_link_name`).
+    (and the metres, `osm_link_m` / `gis_link_m`, the twin's name,
+    `osm_link_name` / `gis_link_name`, and its index label, `osm_link_obj` /
+    `gis_link_obj`: the twin is the same sign recorded twice, which the
+    category's object count merges).
     """
     ob = ob.assign(osm_link=False, gis_link=False, link_note="",
                    osm_link_from="", gis_link_from="",
-                   osm_link_m=np.nan, gis_link_m=np.nan, osm_link_name="", gis_link_name="")
+                   osm_link_m=np.nan, gis_link_m=np.nan, osm_link_name="", gis_link_name="",
+                   osm_link_obj="", gis_link_obj="")
     for _, part in ob.groupby("city"):
         idx = part.index.to_numpy()
         d = dist_matrix(part["lat"].to_numpy(float), part["lon"].to_numpy(float))
@@ -80,6 +83,7 @@ def relink(ob: pd.DataFrame, policy: Policy = DEFAULT) -> pd.DataFrame:
                         f", {urls}" if urls else "")
                     ob.at[a, f"{prov}_link_m"] = float(d[a_pos, b_pos])
                     ob.at[a, f"{prov}_link_name"] = nb
+                    ob.at[a, f"{prov}_link_obj"] = str(b)
                     ob.at[a, "link_note"] = "; ".join(filter(None, [ob.at[a, "link_note"], note]))
                     break
     return ob
@@ -93,7 +97,8 @@ def run(objects: pd.DataFrame, policy: Policy = DEFAULT) -> pd.DataFrame:
       extra column `providers_urls` all of them.
     * `relink`: the flag lent by a twin -- same axes, text «соседняя запись …»;
       `matched_name` is the twin's name, `distance_m` the metres to it; extra
-      columns `relink_note` (the piece of «Связанная запись») and `relink_from`.
+      columns `relink_note` (the piece of «Связанная запись»), `relink_from`
+      and `relink_object` (the twin's object_id).
 
     No row where the object has neither.
     """
@@ -117,7 +122,7 @@ def run(objects: pd.DataFrame, policy: Policy = DEFAULT) -> pd.DataFrame:
                     "label": label, "text": f"соседняя запись {r[f'{prov}_link_from']}",
                     "relink_note": f"{label} из записи «{r[f'{prov}_link_name']}»"
                                    f" ({r[f'{prov}_link_m']:.0f} м)",
-                    "relink_from": r[f"{prov}_link_from"]})
+                    "relink_from": r[f"{prov}_link_from"], "relink_object": r[f"{prov}_link_obj"]})
     if not rows:
         return evidence.empty()
     return evidence.make(rows)

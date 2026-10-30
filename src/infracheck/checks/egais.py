@@ -598,6 +598,8 @@ def match_v4(ob: pd.DataFrame, register: pd.DataFrame, policy: lm.Policy | None 
         row = {"object_id": str(oid), "check": CHECK, "source": SOURCE, "label": LABEL,
                "identity": ident, "record_state": record_state(st, int(rec[i]), register),
                "egais_status_code": st, "licence_name_agrees": bool(agrees[i]),
+               # The join's shop: records within 50 m naming one brand (licmatch `entity`).
+               "egais_entity": r["entity"],
                **out.iloc[i].to_dict(),
                "text": _v4_text(st, risk[i], bool(agrees[i]), basis[i], reg,
                                 out["licence_evidence"].iat[i], out["licence_claimed_by"].iat[i])}

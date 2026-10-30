@@ -21,6 +21,11 @@ Three questions, kept apart on purpose (docs/ARCHITECTURE.md, «Три оси»)
   «кафе», a «магазин-кафе» is catering.  The votes are folded as the archive's
   `profile()` did: one kind -> that kind, yes and no -> conflict, vending
   beside one other kind -> the other kind, nothing said -> no data.
+* **Counting.**  One sign recorded twice is one object.  Records the checks
+  themselves tie together -- the twin a provider was lent from (`relink`),
+  the shop the v4 licence join makes of several records -- are merged into
+  connected components (`merged`); every per-record column stays as it is,
+  and the summary counts merged objects with the records beside them.
 * **Reasons.**  Counted clauses first, one per group, "LABEL: a; b"; then,
   after « || против/не найдено: », every row that was *not* counted and has
   something to say -- what was looked for, and what stood there instead.  The
@@ -124,6 +129,23 @@ class Kind:
 
 
 @dataclass(frozen=True)
+class Merge:
+    """Which Evidence fields tie records of one sign together.
+
+    `pairs` -- (check, field) whose value is another object_id: the relink twin
+    a provider was lent from.  `shared` -- (check, field) whose equal values
+    are one object: the licence join's shop.  Components of both are merged
+    objects, named by `column` after their lowest `entity` (the delivery's
+    own object number, «Объект №»).
+    """
+
+    column: str = ""
+    pairs: tuple[tuple[str, str], ...] = ()
+    shared: tuple[tuple[str, str], ...] = ()
+    disagree: str = ""   # appended to «Подтверждено объектов» when records of one object differ
+
+
+@dataclass(frozen=True)
 class Spec:
     """A category, as `config.yaml` describes it.  Built by `Spec.from_config`."""
 
@@ -153,6 +175,8 @@ class Spec:
     summary: tuple[Mapping, ...] = ()
     combinations_title: str = ""
     combinations_empty: str = "—"
+    merge: Merge = Merge()
+    records_word: str = "записей"
     raw: Mapping = field(default_factory=dict)
 
     @classmethod
@@ -174,7 +198,11 @@ class Spec:
                         for v in kd["votes"]),
             schemes=schemes, words=dict(kd["words"]), unknown=kd.get("unknown", "?"),
             sep=kd.get("sep", " | "))
-        q, how = block.get("query", {}), block.get("how", {})
+        q, how, mg = block.get("query", {}), block.get("how", {}), block.get("merge", {})
+        merge = Merge(column=mg.get("column", ""),
+                      pairs=tuple((p["check"], p["field"]) for p in mg.get("pairs", [])),
+                      shared=tuple((p["check"], p["field"]) for p in mg.get("shared", [])),
+                      disagree=mg.get("disagree", ""))
         return cls(
             name=name, checks=tuple(block["checks"]),
             min_sources=int(ex["min_sources"]),
@@ -196,6 +224,7 @@ class Spec:
             derived=dict(block.get("derived", {})),
             summary=tuple(block.get("summary", [])),
             combinations_title=block.get("combinations_title", ""),
+            merge=merge, records_word=mg.get("records_word", "записей"),
             raw=block)
 
     def group_of(self, source: str) -> Group | None:
@@ -257,6 +286,59 @@ def needs_query(ev: pd.DataFrame, index: pd.Index, spec: Spec) -> pd.Series:
         have += index.isin(c.loc[c["source"].isin(g.sources), "object_id"]).astype(int)
     skip = index.isin(c.loc[c["check"].isin(spec.query_skip_checks), "object_id"])
     return pd.Series((have.to_numpy() < spec.min_sources) & ~skip, index=index, name=spec.query_column)
+
+
+# --------------------------------------------------------------------- merging
+
+def _link_rows(ev: pd.DataFrame, check: str, fld: str) -> pd.DataFrame:
+    """The rows of `check`; an error if it wrote some without `fld` (stale Evidence)."""
+    e = ev[ev["check"].eq(check)]
+    if len(e) and fld not in e.columns:
+        raise ValueError(f"merge: {check} rows carry no {fld!r} -- Evidence older than the merge rule")
+    return e
+
+
+def merged(ev: pd.DataFrame, objects: pd.DataFrame, spec: Spec) -> pd.Series:
+    """The merged object of every record: connected components of `spec.merge` links.
+
+    A relink twin is the contractor's own missed merge -- the provider is lent
+    *because* the two records are one sign -- so counting it as a second
+    object counts one sign twice (and, holding both providers, as confirmed
+    twice).  Links are taken within the delivery's own records only.  The
+    component is named by its lowest `entity` (position when the table has
+    none), so a reader finds it as an «Объект №».
+    """
+    index = objects.index
+    number = (objects["entity"] if "entity" in objects else pd.Series(range(len(index)), index=index))
+    pos = {o: i for i, o in enumerate(index)}
+    parent = list(range(len(index)))
+
+    def root(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    def union(a: int, b: int) -> None:
+        ra, rb = root(a), root(b)
+        if ra != rb:
+            parent[max(ra, rb)] = min(ra, rb)
+
+    for check, fld in spec.merge.pairs:
+        e = _link_rows(ev, check, fld)
+        for a, b in zip(e["object_id"], e[fld], strict=True):
+            if a in pos and b in pos:
+                union(pos[a], pos[b])
+    for check, fld in spec.merge.shared:
+        e = _link_rows(ev, check, fld)
+        e = e[e["object_id"].isin(pos) & e[fld].astype(str).ne("")]
+        for _, members in e.groupby(fld, sort=False)["object_id"]:
+            first = pos[members.iloc[0]]
+            for o in members.iloc[1:]:
+                union(first, pos[o])
+    roots = [root(i) for i in range(len(index))]
+    low = pd.Series(number.to_numpy(), index=roots).groupby(level=0).min()
+    return pd.Series(low.reindex(roots).to_numpy(), index=index, name=spec.merge.column or "merged")
 
 
 # --------------------------------------------------------------------- reasons
@@ -404,7 +486,8 @@ def decide(objects: pd.DataFrame, ev: pd.DataFrame, wide: pd.DataFrame, spec: Sp
     `wide()`), indexed by object_id.  Returns the ObjectTable joined with
     `wide`, the kind columns, one bool per group, `n_sources`, `sources`,
     `confirmed`, the `how` text, `reasons`, the query flag and the `derived`
-    expressions -- the archive's `final_confirm_objects.csv`, row for row.
+    expressions -- the archive's `final_confirm_objects.csv`, row for row --
+    and the merged object (`merge.column`).
     Where a check's wide column has the name of an adapter column (the
     export's `osm` / `gis` flags), the check's -- rebuilt from Evidence -- wins.
     """
@@ -420,26 +503,61 @@ def decide(objects: pd.DataFrame, ev: pd.DataFrame, wide: pd.DataFrame, spec: Sp
     out["reasons"] = reasons(ev, index, spec)
     if spec.query_column:
         out[spec.query_column] = needs_query(ev, index, spec)
+    if spec.merge.column:
+        out[spec.merge.column] = merged(ev, objects, spec)
     return out
 
 
 # --------------------------------------------------------------------- summary
 
+def _merged_of(table: pd.DataFrame, spec: Spec) -> pd.Series | None:
+    col = spec.merge.column
+    return table[col] if col and col in table.columns else None
+
+
+def disagreeing(table: pd.DataFrame, spec: Spec, column: str = "confirmed") -> int:
+    """Merged objects whose records differ in `column` (0 when nothing is merged)."""
+    m = _merged_of(table, spec)
+    return 0 if m is None else int((table[column].groupby(m.to_numpy()).nunique() > 1).sum())
+
+
+def _count(mask, table: pd.DataFrame, spec: Spec) -> tuple[int, int]:
+    """(merged objects with any record in `mask`, records in `mask`)."""
+    mask = pd.Series(mask, index=table.index).astype(bool)
+    m = _merged_of(table, spec)
+    n = int(mask.sum())
+    return (n if m is None else int(m[mask].nunique())), n
+
+
 def _value(line: Mapping, table: pd.DataFrame, rows: pd.DataFrame, spec: Spec):
+    """One summary value.  With merging on, objects are merged objects and the
+    record count follows in brackets ("670 (записей 749)"); a merged object
+    counts on a line when any of its records does."""
+    m, w = _merged_of(table, spec), spec.records_word
     v = line.get("value")
     if v == "rows":
         return len(rows)
     if v == "objects":
-        return len(table)
+        return len(table) if m is None else f"{m.nunique()} ({w} {len(table)})"
     if v == "confirmed_objects":
-        return f"{table['confirmed'].sum()} из {len(table)} ({table['confirmed'].mean():.1%})"
+        c, n = int(table["confirmed"].sum()), len(table)
+        if m is None:
+            return f"{c} из {n} ({table['confirmed'].mean():.1%})"
+        cm, nm = _count(table["confirmed"], table, spec)[0], m.nunique()
+        out = f"{cm} из {nm} ({cm / nm:.1%}); {w} {c} из {n}"
+        k = disagreeing(table, spec)
+        return out + (spec.merge.disagree.format(n=k) if k else "")
     if v == "confirmed_rows":
         return f"{rows['confirmed'].sum()} из {len(rows)}"
     if "count" in line:
-        return int(pd.Series(_expr(table, line["count"], spec)).astype(bool).sum())
+        cm, c = _count(_expr(table, line["count"], spec), table, spec)
+        return c if m is None else f"{cm} ({w} {c})"
     if "counts" in line:
-        return line.get("sep", " / ").join(
-            str(int(pd.Series(_expr(table, e, spec)).astype(bool).sum())) for e in line["counts"])
+        sep = line.get("sep", " / ")
+        pairs = [_count(_expr(table, e, spec), table, spec) for e in line["counts"]]
+        if m is None:
+            return sep.join(str(c) for _, c in pairs)
+        return sep.join(str(cm) for cm, _ in pairs) + f" ({w} " + sep.join(str(c) for _, c in pairs) + ")"
     raise ValueError(f"summary line without a value: {line}")
 
 
@@ -451,7 +569,10 @@ def summarise(table: pd.DataFrame, rows: pd.DataFrame, spec: Spec) -> list[tuple
     boolean expression over the decided table's columns -- or `counts`, several
     joined by " / ".  A line with `for` repeats once per item, `{}` in label
     and expression replaced by it.  `rows` is the table broadcast to the
-    delivery's rows (`confirmed` per row).
+    delivery's rows (`confirmed` per row).  With `merge` configured, every
+    object count is of merged objects, the record count in brackets beside it;
+    on a line of several values (`for`) a merged object whose records differ
+    counts under each of their values.
     """
     out = []
     for line in spec.summary:
@@ -466,9 +587,26 @@ def summarise(table: pd.DataFrame, rows: pd.DataFrame, spec: Spec) -> list[tuple
     return out
 
 
+def combinations(table: pd.DataFrame, spec: Spec) -> pd.Series:
+    """Objects per combination of counted sources.
+
+    A merged object is listed once, under every source any of its records has
+    (its records are one sign, and each found it).
+    """
+    m = _merged_of(table, spec)
+    if m is None:
+        sources = table["sources"]
+    else:
+        cols = [g.column for g in spec.groups]
+        on = table[cols].astype(bool).groupby(m.to_numpy(), sort=False).any()
+        sources = pd.Series([spec.sources_sep.join(g.label for g, x in zip(spec.groups, r, strict=True) if x)
+                             for r in on.itertuples(index=False)], index=on.index, name="sources")
+    return sources.replace("", spec.combinations_empty).value_counts()
+
+
 def summary_text(title: str, summary: list[tuple[str, object]], table: pd.DataFrame, spec: Spec) -> str:
     """One delivery's block of the combined summary file, as the archive wrote it."""
-    combos = table["sources"].replace("", spec.combinations_empty).value_counts().to_string()
+    combos = combinations(table, spec).to_string()
     return (f"== {title}\n" + "\n".join(f"{k}: {v}" for k, v in summary)
             + f"\n\n{spec.combinations_title}\n" + combos + "\n")
 

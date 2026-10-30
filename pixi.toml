@@ -1,0 +1,45 @@
+# pixi.toml is the single source of truth for the software environment.
+# One environment serves everything: Snakemake, the rule scripts, the
+# library under src/, the licmatch package, Quarto and the dev tooling.
+# Rules run in it directly (no per-rule conda envs: everything is Python).
+
+[workspace]
+name = "infra_validation"
+version = "0.1.0"
+authors = ["apicomplexa <aleksadr.kulish@gmail.com>"]
+channels = ["conda-forge", "bioconda", "nodefaults"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = ">=3.14,<3.15"
+snakemake = ">=9.19"
+graphviz = "*"           # `pixi run dag`
+pandas = ">=3.0,<4"
+numpy = ">=2.3,<3"
+openpyxl = ">=3.1.5,<4"
+rapidfuzz = ">=3.9"
+python-duckdb = ">=1.3"  # parquet without pyarrow; FSQ via httpfs
+pyyaml = "*"
+pyarrow = "*"           # parquet intermediates between rules
+quarto = ">=1.9,<2"
+jupyter = "*"
+ipykernel = "*"
+pytest = "*"
+ruff = "*"
+snakefmt = "*"
+pre-commit = "*"
+
+[pypi-dependencies]
+infracheck = { path = ".", editable = true }
+licmatch = { path = "packages/licmatch", editable = true }
+
+[tasks]
+workflow = { cmd = "snakemake", description = "Run the workflow (extra args go to snakemake)" }
+dry-run = { cmd = "snakemake --dry-run", description = "Show what would be executed" }
+unlock = { cmd = "snakemake --unlock", description = "Remove a stale Snakemake lock" }
+dag = { cmd = "mkdir -p results/reports && snakemake --dry-run --dag --quiet | sed -n '/^digraph/,$p' | dot -Tpdf > results/reports/workflow-dag.pdf", description = "Render the job DAG" }
+test = { cmd = "pytest", description = "Unit and regression tests (tests/, packages/licmatch/tests)" }
+licmatch-test = { cmd = "python packages/licmatch/run_tests.py", description = "licmatch tests only (stdlib unittest)" }
+fmt = { cmd = "ruff format src packages workflow tests && ruff check --fix src packages workflow tests && snakefmt workflow", description = "Format Python and Snakemake code" }
+lint = { cmd = "ruff check src packages workflow tests && snakefmt --check workflow && snakemake --lint", description = "Lint everything (no changes)" }
+hooks = { cmd = "pre-commit install", description = "Install git pre-commit hooks" }

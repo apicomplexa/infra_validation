@@ -1,0 +1,33 @@
+# The infracheck library (src/infracheck) plus tool configuration.
+# Dependencies live in pixi.toml; this file only makes the package installable
+# (editable, from pixi) and configures ruff, snakefmt and pytest.
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "infracheck"
+version = "0.1.0"
+description = "Validation of urban-infrastructure objects against independent sources"
+requires-python = ">=3.14"
+dependencies = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/infracheck"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+extend-exclude = [".pixi", ".snakemake", "workflow/notebooks"]
+builtins = ["snakemake"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "SIM"]
+
+[tool.snakefmt]
+line_length = 120
+include = '\.smk$|^Snakefile$'
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "packages/licmatch/tests"]

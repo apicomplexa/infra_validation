@@ -316,7 +316,13 @@ def read(name: str, address: str, lat: float, lon: float, *,
 
 
 def load_cache(path) -> dict[str, dict]:
-    """Everything checked so far, keyed by `site_key`; later lines win."""
+    """Everything checked so far, keyed by the query (`search_url`); later lines win.
+
+    The query, not the object, is what an answer answers.  A v4 `site_key` is
+    the coordinate alone, so an alcohol and a tobacco record at one door share
+    it while each is searched by its own name; keyed by site, the second answer
+    would overwrite the first.  Each line still carries its `site_key`.
+    """
     path = Path(path)
     if not path.exists():
         return {}
@@ -324,7 +330,7 @@ def load_cache(path) -> dict[str, dict]:
     for line in path.read_text(encoding="utf-8").splitlines():
         if line.strip():
             rec = json.loads(line)
-            out[rec["site_key"]] = rec
+            out[rec["search_url"]] = rec
     return out
 
 
@@ -487,6 +493,12 @@ _AXES = {   # status -> (identity, record_state)
 }
 
 
+def own_query(r: pd.Series) -> str:
+    """The search URL an object's own name and address make (the cache key)."""
+    return search_url(r["name"], r["address"], float(r["lat"]), float(r["lon"]), r["city"],
+                      r.get("yandex_region") or DEFAULT_REGION)
+
+
 def run(objects: pd.DataFrame, policy: Policy = DEFAULT,
         cache: dict[str, dict] | None = None) -> pd.DataFrame:
     """Evidence of Yandex Maps for every object.
@@ -494,8 +506,9 @@ def run(objects: pd.DataFrame, policy: Policy = DEFAULT,
     ``yandex_contractor`` rows (``source = "yandex"``): the contractor's hit
     re-judged by name -- strong/current «Яндекс» where the name matched, weak/
     current «Яндекс (подрядчик)» for a raw «Найдено» that names someone else.
-    ``yandex`` rows: our own query, judged from `cache` (objects never read have
-    no row) -- present strong/current, closed strong/closed, ambiguous weak,
+    ``yandex`` rows: our own query, judged from `cache` (keyed by query, see
+    `load_cache`; an answer counts only for the object whose name and address
+    make that query; objects never read have no row) -- present strong/current, closed strong/closed, ambiguous weak,
     absent none, error none/unknown with empty text.  `kind_text` is the card's
     rubric (``yandex_rubric``).  Extra columns: `yandex_status`,
     `yandex_nearby`, `yandex_search_url`, `yandex_checked`.
@@ -517,7 +530,7 @@ def run(objects: pd.DataFrame, policy: Policy = DEFAULT,
                 "object_id": oid, "check": "yandex_contractor", "source": "yandex",
                 "identity": "weak", "record_state": "current", "name_score": c["sim"],
                 "label": policy.label_contractor_miss, "text": policy.contractor_miss_text})
-        rec = cache.get(r["site_key"])
+        rec = cache.get(own_query(r))
         if rec is None:
             continue
         v = verdict(rec, str(r["name"]), float(r["lat"]), float(r["lon"]),
@@ -575,11 +588,12 @@ def fetch_missing(ob: pd.DataFrame, cache: dict, cache_path, *, limit: int = 0,
     A failure is not an answer: not cached, asked again next run.  Returns the
     number of pages cached.
     """
-    todo = [r for _, r in ob.iterrows() if r["site_key"] not in cache]
+    urls = [own_query(r) for _, r in ob.iterrows()]
+    todo = [r for (_, r), url in zip(ob.iterrows(), urls, strict=True) if url not in cache]
     if limit:
         todo = todo[:limit]
     print(f"  Yandex: {len(ob):,} objects in scope, "
-          f"{int(ob['site_key'].isin(cache).sum()):,} cached, {len(todo):,} to read now")
+          f"{sum(u in cache for u in urls):,} cached, {len(todo):,} to read now")
     done = 0
     for i, r in enumerate(todo, 1):
         try:
@@ -593,7 +607,7 @@ def fetch_missing(ob: pd.DataFrame, cache: dict, cache_path, *, limit: int = 0,
             print(f"    [{i:>4}/{len(todo)}] -- failed  {rec['note']}", flush=True)
             continue
         append_cache(rec, cache_path)
-        cache[r["site_key"]] = rec
+        cache[rec["search_url"]] = rec
         done += 1
         print(f"    [{i:>4}/{len(todo)}] {len(rec['candidates']):>2} found", flush=True)
     return done

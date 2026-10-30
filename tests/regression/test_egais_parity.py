@@ -120,9 +120,11 @@ def test_v4_brand_aliases(golden, v4_run):
 
 
 def test_parser(golden):
-    parsed = ROOT / "data/temp/egais/egais_licences_final.tsv"
+    # The workflow's egais_register rule writes the extract for the cities of
+    # config/deliveries.tsv -- today the three final-delivery cities.
+    parsed = ROOT / "data/temp/egais/registry.tsv"
     if not parsed.exists():
-        pytest.skip(f"{parsed.relative_to(ROOT)} absent: run the parse CLI first (~6 min)")
+        pytest.skip(f"{parsed.relative_to(ROOT)} absent: run `pixi run workflow` first")
     assert parsed.read_bytes() == (golden / "egais/egais_licences_final.tsv").read_bytes()
     # Its Arkhangelsk rows are the city extract the v4 join reads.
     f = pd.read_csv(parsed, sep="\t", dtype=str, keep_default_na=False)

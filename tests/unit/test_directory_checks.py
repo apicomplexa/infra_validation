@@ -49,7 +49,7 @@ def test_cache_roundtrip_and_error(tmp_path):
     rec = {**yandex.parse(CARD, "u").to_dict(), "note": "", "checked": "2026-10-29", "site_key": "k"}
     p = tmp_path / "c.jsonl"
     yandex.append_cache(rec, p)
-    assert yandex.load_cache(p)["k"]["checked"] == "2026-10-29"
+    assert yandex.load_cache(p)["u"]["checked"] == "2026-10-29"   # keyed by query
     assert yandex.verdict({"note": "rate-limited"}, "x", 0, 0)["status"] == yandex.STATUS_ERROR
 
 
@@ -76,9 +76,10 @@ def test_rejudge_contractor():
 
 def test_yandex_run_axes():
     objs = ob([{"object_id": "d:0", "name": "KDV", "lat": 64.51158, "lon": 40.582827,
+                "address": "улица Дежнёвцев, 34", "city": "Архангельск",
                 "generic": False, "site_key": "k0", "yandex_contractor_rows": json.dumps([["Чужой", "", ""]])}])
     rec = {**yandex.parse(CARD, "u").to_dict(), "note": "", "checked": "2026-10-29"}
-    ev = yandex.run(objs, cache={"k0": rec})
+    ev = yandex.run(objs, cache={yandex.own_query(objs.iloc[0]): rec})
     assert list(ev["check"]) == ["yandex_contractor", "yandex"]
     assert list(ev["identity"]) == ["weak", "strong"]
     assert ev.loc[0, "text"] == "по адресу есть общепит, но с другим названием"
@@ -129,3 +130,16 @@ def test_export_name_and_arkh_admin():
     aa = arkh_admin.run(objs)
     assert list(aa["object_id"]) == ["a"] and aa.loc[0, "label"] == "Администрация"
     assert list(arkh_admin.wide(aa, objs.index)["arkh_admin"]) == [True, False]
+
+
+def test_cache_answers_the_query_not_the_door():
+    # Two records at one coordinate (an alcohol and a tobacco shop at one door
+    # share a v4 site_key): the cached answer to one name is not the other's.
+    base = {"lat": 64.51158, "lon": 40.582827, "address": "улица Дежнёвцев, 34", "city": "Архангельск",
+            "generic": False, "site_key": "door", "yandex_contractor_rows": "[]"}
+    objs = ob([{"object_id": "a:0", "name": "KDV", **base}, {"object_id": "t:0", "name": "Табачная лавка", **base}])
+    rec = {**yandex.parse(CARD, "u").to_dict(), "note": "", "checked": "2026-10-29", "site_key": "door"}
+    rec["search_url"] = yandex.own_query(objs.loc["a:0"])
+    ev = yandex.run(objs, cache={rec["search_url"]: rec})
+    assert list(ev["object_id"]) == ["a:0"]
+    assert yandex.own_query(objs.loc["t:0"]) != rec["search_url"]

@@ -71,7 +71,7 @@ def run(check: str, objects: pd.DataFrame, pol, resource: Path | str | None = No
     """
     mod = module(check)
     if check == "yandex":
-        cache = own_queries(objects, mod.load_cache(resource) if resource else {})
+        cache = mod.load_cache(resource) if resource else {}
         ev = mod.run(objects, pol, cache=cache)
     elif check in ("overture", "foursquare"):
         ev = mod.run(objects, mod.load(resource), pol)
@@ -84,27 +84,6 @@ def run(check: str, objects: pd.DataFrame, pol, resource: Path | str | None = No
         ev = mod.run(objects, pol)
     evidence.validate(ev)
     return ev
-
-
-def own_queries(objects: pd.DataFrame, cache: dict[str, dict]) -> dict[str, dict]:
-    """The cached answers to *each object's own* query.
-
-    The cache is keyed by `site_key`, and a v4 site key is the coordinate
-    alone: an alcohol and a tobacco record at one door share it, though only
-    one of them was queried, by its own name.  An answer counts for an object
-    only if its search URL is the one this object's query would read.
-    """
-    from infracheck.checks import yandex as y
-    out = {}
-    for _, r in objects.iterrows():
-        rec = cache.get(r["site_key"])
-        if rec is None:
-            continue
-        url = y.search_url(r["name"], r["address"], float(r["lat"]), float(r["lon"]), r["city"],
-                           r.get("yandex_region") or y.DEFAULT_REGION)
-        if rec.get("search_url") == url:
-            out[r["site_key"]] = rec
-    return out
 
 
 def settlements(objects: pd.DataFrame) -> set[str]:

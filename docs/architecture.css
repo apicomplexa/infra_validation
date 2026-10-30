@@ -70,3 +70,18 @@ body.quarto-dark .arch {
 .arch .pill.no b { background: var(--against); }
 .arch .pill.note b { background: var(--a-muted); }
 .arch .cell small { color: var(--a-ink2); font-size: 12.5px; line-height: 1.45; }
+
+/* Flow diagrams of docs/workflow.qmd: conditions, outcomes, links to another
+   matcher's section. Unused by architecture.qmd. */
+.arch svg .r-q { stroke: var(--a-muted); fill: var(--a-wash); }
+.arch svg .r-ok { stroke: var(--good); fill: color-mix(in srgb, var(--good) 9%, var(--a-surface)); }
+.arch svg .r-no { stroke: var(--against); fill: color-mix(in srgb, var(--against) 7%, var(--a-surface)); }
+.arch svg .r-note { stroke: var(--c-cat); fill: color-mix(in srgb, var(--c-cat) 9%, var(--a-surface)); }
+.arch svg .r-ref { stroke: var(--c-lm); stroke-dasharray: 5 3; }
+.arch svg .r-plain { stroke: var(--a-line); }
+.arch svg .q { fill: var(--a-ink); font-size: 12px; }
+.arch svg .x { fill: var(--against); font-size: 11.5px; }
+.arch svg a, .arch svg a text { cursor: pointer; text-decoration: none; }
+.arch svg a:hover .box { stroke-width: 2.6; }
+.arch svg a .t { fill: var(--c-lm); }
+.arch .frame svg[style] { min-width: 0; margin: 0 auto; }

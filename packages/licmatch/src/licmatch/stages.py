@@ -51,8 +51,18 @@ from .agree import agree_matrix, is_generic_name, names_agree
 from .brands import BRAND_DEFAULTS, BrandParams, BrandResult, learn_brands
 from .geo import haversine_m
 from .names import RU_RETAIL_ALIASES, brand_key, fascia_name, holder_name, is_generic
-from .scoring import (DEFAULTS, NAME_ALIAS, NAME_KINDS, ROUTE_GEO, ROUTE_NAMES,
-                      MatchParams, Scores, accepted, score_matrix, side)
+from .scoring import (
+    DEFAULTS,
+    NAME_ALIAS,
+    NAME_KINDS,
+    ROUTE_GEO,
+    ROUTE_NAMES,
+    MatchParams,
+    Scores,
+    accepted,
+    score_matrix,
+    side,
+)
 from .select import PREFER_LIFT
 from .text import fold
 from .toponym import home_city_re, parse_address_fields, parse_address_line

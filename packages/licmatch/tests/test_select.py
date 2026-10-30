@@ -4,10 +4,18 @@ from __future__ import annotations
 import unittest
 
 import numpy as np
-
-from licmatch import (DEFAULTS, claimed_keys, fascia_name, holder_name,
-                      home_city_re, parse_address_fields, parse_address_line,
-                      score_matrix, select, side)
+from licmatch import (
+    DEFAULTS,
+    claimed_keys,
+    fascia_name,
+    holder_name,
+    home_city_re,
+    parse_address_fields,
+    parse_address_line,
+    score_matrix,
+    select,
+    side,
+)
 
 CITY = home_city_re("Архангельск")
 

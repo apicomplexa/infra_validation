@@ -43,7 +43,8 @@ COLUMNS = {
     "identity": "string",      # IDENTITY
     "record_state": "string",  # RECORD_STATE
     "kind_text": "string",     # source's own kind description, raw
-    "kind_scheme": "string",   # vocabulary of kind_text: ru_text, yandex_rubric, fsq_category, overture_category, egais_activity
+    # vocabulary of kind_text: ru_text, yandex_rubric, fsq_category, overture_category, egais_activity
+    "kind_scheme": "string",
     "matched_name": "string",
     "matched_address": "string",
     "distance_m": "Float64",

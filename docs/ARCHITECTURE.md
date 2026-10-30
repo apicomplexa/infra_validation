@@ -128,9 +128,17 @@ matched_address, distance_m, name_score, ref, label, text` + колонки пр
 
 - «Общепит?» в старом коде читает вид у найденных записей FSQ и Overture,
   в том числе у тех, что достались соседнему объекту (`exclusive`), то есть
-  у `identity = weak`. Конфиг: `profile.vote_identity: [strong, weak]`.
-- Место Overture, собранное только из Foursquare, не засчитывается вовсе
-  (а не «как FSQ»): решает прямая проверка FSQ.
+  у `identity = weak`. Конфиг: `kind.vote_identity: [strong, weak]`.
+
+### Исправлено
+
+- 2026-10-30. Место Overture, собранное только из Foursquare
+  (`Foursquare|Overture`), больше не засчитывается: решает прямая проверка
+  FSQ. Архив сравнивал строку целиком и не срабатывал никогда, так что 21
+  объект получал лишний источник. Конфиг: `existence.exclude` по наборам.
+  Там же заполнена колонка «Общепит?», которую архив поставлял пустой.
+  Подробно и с таблицей изменений:
+  `docs/changes/2026-10-30-overture-fsq-and-food-column.md`.
 
 ## Данные
 

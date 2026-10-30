@@ -61,15 +61,25 @@ class Group:
 
 @dataclass(frozen=True)
 class Exclusion:
-    """A (source, origin) whose record is another group's record, not a new one.
+    """Rows of `source` built only from `only` datasets: another group's record.
 
-    An eligible row that matches is dropped *silently*: it is not a finding at
-    all, so it is neither counted nor listed after « || ».  `origin` is
-    compared exactly, case-folded.
+    An aggregator names the upstream datasets of a record in `origin`
+    ("Foursquare|Overture"); the record is a new source only if some dataset
+    other than `only` contributed.  Tokens are split on `sep`, case-folded,
+    and the aggregator's own name (`ignore`) is not a dataset.  An eligible row
+    that matches is dropped *silently*: it is not a finding at all, so it is
+    neither counted nor listed after « || ».
     """
 
     source: str
-    origin: str
+    only: tuple[str, ...]
+    ignore: tuple[str, ...] = ()
+    sep: str = "|"
+
+    def matches(self, origin: str) -> bool:
+        tokens = {t.strip().casefold() for t in str(origin).split(self.sep)} - {""}
+        tokens -= {t.casefold() for t in self.ignore}
+        return bool(tokens) and tokens <= {t.casefold() for t in self.only}
 
 
 @dataclass(frozen=True)
@@ -171,7 +181,8 @@ class Spec:
             never_count=tuple(ex.get("never_count", [])),
             groups=tuple(Group(label=g["label"], column=g["column"], sources=tuple(g["sources"]),
                                checks=tuple(g.get("checks", []))) for g in ex["groups"]),
-            exclude=tuple(Exclusion(source=e["source"], origin=e["origin"]) for e in ex.get("exclude", [])),
+            exclude=tuple(Exclusion(source=e["source"], only=tuple(e["only"]), ignore=tuple(e.get("ignore", [])),
+                                    sep=e.get("sep", "|")) for e in ex.get("exclude", [])),
             sources_sep=ex.get("sources_sep", "; "),
             pro_sep=rs["pro_sep"], group_sep=rs["group_sep"], con_intro=rs["con_intro"],
             con_sep=rs["con_sep"], con_order=tuple(rs["con_order"]), no_sources=rs["no_sources"],
@@ -197,9 +208,8 @@ class Spec:
 
 def _excluded(ev: pd.DataFrame, spec: Spec) -> pd.Series:
     out = pd.Series(False, index=ev.index)
-    origin = ev["origin"].astype(str).str.casefold()
     for e in spec.exclude:
-        out |= ev["source"].eq(e.source) & origin.eq(e.origin.casefold())
+        out |= ev["source"].eq(e.source) & ev["origin"].map(e.matches).astype(bool)
     return out
 
 

@@ -3,9 +3,17 @@ from __future__ import annotations
 
 import unittest
 
-from licmatch import (Toponym, address_score, home_city_re, house_parts,
-                      parse_address_fields, parse_address_line, stem,
-                      street_similarity, street_toponym)
+from licmatch import (
+    Toponym,
+    address_score,
+    home_city_re,
+    house_parts,
+    parse_address_fields,
+    parse_address_line,
+    stem,
+    street_similarity,
+    street_toponym,
+)
 
 CITY = home_city_re("Архангельск")
 

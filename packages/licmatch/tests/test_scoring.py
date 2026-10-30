@@ -10,12 +10,27 @@ from __future__ import annotations
 import unittest
 
 import numpy as np
-
-from licmatch import (DEFAULTS, NAME_ALIAS, NAME_FUZZY, NAME_GENERIC,
-                      ROUTE_ADDR, ROUTE_GEO, ROUTE_NONE, MatchParams, accepted,
-                      address_score, brand_key, fascia_name, holder_name,
-                      home_city_re, pair_score, parse_address_fields,
-                      parse_address_line, score_matrix, side)
+from licmatch import (
+    DEFAULTS,
+    NAME_ALIAS,
+    NAME_FUZZY,
+    NAME_GENERIC,
+    ROUTE_ADDR,
+    ROUTE_GEO,
+    ROUTE_NONE,
+    MatchParams,
+    accepted,
+    address_score,
+    brand_key,
+    fascia_name,
+    holder_name,
+    home_city_re,
+    pair_score,
+    parse_address_fields,
+    parse_address_line,
+    score_matrix,
+    side,
+)
 
 CITY = home_city_re("Архангельск")
 

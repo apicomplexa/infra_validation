@@ -35,8 +35,8 @@ read: a learned pair is a hypothesis with a count behind it, not a fact.
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 import numpy as np
 import pandas as pd
@@ -176,7 +176,7 @@ def learn_brands(strength: np.ndarray, fascia: Sequence[str], holders: Sequence,
     for it in range(1, params.max_iter + 1):
         value = strength.copy()
         if votes:
-            for i, j in zip(ii, jj):
+            for i, j in zip(ii, jj, strict=True):
                 if is_gen[i]:
                     continue
                 f, h, s = fk[i], hold[j], site[i]
@@ -204,14 +204,14 @@ def learn_brands(strength: np.ndarray, fascia: Sequence[str], holders: Sequence,
 
     names_of: dict[str, str] = {}
     if holder_names is not None:
-        for h, nm in zip(hold, holder_names):
+        for h, nm in zip(hold, holder_names, strict=False):
             names_of.setdefault(h, str(nm))
 
     # The holder's side: which fascias reach each of its outlets.
     unit_arr = np.asarray(unit, dtype=object)
     h_units: dict[str, set] = defaultdict(set)
     fh_units: dict[tuple, set] = defaultdict(set)
-    for i, j in zip(ii, jj):
+    for i, j in zip(ii, jj, strict=True):
         h_units[hold[j]].add(unit_arr[j])
         if not is_gen[i]:
             fh_units[(fk[i], hold[j])].add(unit_arr[j])
@@ -267,7 +267,7 @@ def learn_brands(strength: np.ndarray, fascia: Sequence[str], holders: Sequence,
                   ("holder_cover", 3)):
         table[c] = table[c].round(nd)
     pairs = frozenset(zip(table.loc[table["accepted"], "fascia"],
-                          table.loc[table["accepted"], "holder"]))
+                          table.loc[table["accepted"], "holder"], strict=True))
     site_votes = {k: frozenset(v) for k, v in votes.items() if v}
     return BrandResult(table=table, pairs=pairs, iterations=it,
                        converged=converged, assignment=pick,

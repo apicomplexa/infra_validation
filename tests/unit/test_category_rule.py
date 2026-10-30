@@ -50,14 +50,22 @@ def test_reasons_order_and_con_clauses(spec):
     assert r["b"] == "источников нет"
 
 
-def test_excluded_origin_is_silent(spec):
-    e = ev({"object_id": "a", "check": "overture", "source": "overture", "origin": "Foursquare",
+def test_foursquare_only_overture_is_silent(spec):
+    e = ev({"object_id": "a", "check": "overture", "source": "overture", "origin": "Foursquare|Overture",
             "label": "Overture", "text": "x"})
     assert base.existence(e, IDX, spec).loc["a", "n_sources"] == 0
     assert base.reasons(e, IDX, spec)["a"] == "источников нет"
-    # The archive's real value never matches: kept counted, as it was.
-    e.loc[0, "origin"] = "Foursquare|Overture"
-    assert base.existence(e, IDX, spec).loc["a", "n_sources"] == 1
+    # Any other upstream dataset makes it a source of its own.
+    for origin in ("meta|Overture", "AllThePlaces|Overture", "Foursquare|meta|Overture"):
+        e.loc[0, "origin"] = origin
+        assert base.existence(e, IDX, spec).loc["a", "n_sources"] == 1, origin
+
+
+def test_weak_foursquare_only_overture_still_speaks(spec):
+    """Exclusion drops only rows that would count; a lost record stays after « || »."""
+    e = ev({"object_id": "a", "check": "overture", "source": "overture", "origin": "Foursquare|Overture",
+            "identity": "weak", "label": "Overture", "text": "lost"})
+    assert base.reasons(e, IDX, spec)["a"] == "источников нет || против/не найдено: Overture: lost"
 
 
 @pytest.mark.parametrize("text,role", [

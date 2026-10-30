@@ -11,7 +11,6 @@ from __future__ import annotations
 import unittest
 
 import numpy as np
-
 from licmatch import BRAND_DEFAULTS, BrandParams, fascia_name, learn_brands
 
 

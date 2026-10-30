@@ -19,8 +19,8 @@ every pair at once, and `tests/test_scoring.py` checks the two agree.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
-from typing import Iterable, Mapping
 
 import numpy as np
 import pandas as pd
@@ -28,10 +28,19 @@ from rapidfuzz import fuzz, process
 
 from .geo import haversine_m
 from .names import brand_key, is_generic
-from .toponym import (ADDR_HOUSE_W, ADDR_STREET_W, SETTLEMENT_CONFLICT,
-                      SETTLEMENT_ONE_SIDED, STREET_SET_W, STREET_SORT_W,
-                      TYPE_CONFLICT, Toponym, address_score, house_similarity,
-                      street_similarity)
+from .toponym import (
+    ADDR_HOUSE_W,
+    ADDR_STREET_W,
+    SETTLEMENT_CONFLICT,
+    SETTLEMENT_ONE_SIDED,
+    STREET_SET_W,
+    STREET_SORT_W,
+    TYPE_CONFLICT,
+    Toponym,
+    address_score,
+    house_similarity,
+    street_similarity,
+)
 
 ROUTE_NONE, ROUTE_GEO, ROUTE_ADDR = -1, 0, 1
 ROUTE_NAMES = {ROUTE_GEO: "geo", ROUTE_ADDR: "address"}
@@ -98,7 +107,7 @@ class MatchParams:
     def weights(self) -> tuple[float, float, float]:
         return self.w_addr, self.w_name, self.w_dist
 
-    def with_weights(self, w_addr, w_name, w_dist) -> "MatchParams":
+    def with_weights(self, w_addr, w_name, w_dist) -> MatchParams:
         return replace(self, w_addr=w_addr, w_name=w_name, w_dist=w_dist)
 
 
@@ -285,7 +294,8 @@ def score_matrix(a: pd.DataFrame, b: pd.DataFrame,
         # Side a is compared on `brand_key`, the key `learn_brands()` counts
         # fascias by: otherwise a learned ("красное белое", h) pair never meets
         # the "красное&белое" that `name_key()` leaves on the side.
-        ak = [brand_key(k) for k in _alias_col(a)]; bk = _alias_col(b)
+        ak = [brand_key(k) for k in _alias_col(a)]
+        bk = _alias_col(b)
         pairs = {(brand_key(str(k)), str(v)) for k, v in aliases}
         a_of = {k: [] for k, _ in pairs}
         for k, v in pairs:

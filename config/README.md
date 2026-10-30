@@ -50,7 +50,7 @@ category-specific code; `catering.py` only names its block.
 | `existence.count` | rule | The axes a row needs to count (`identity`, `record_state`). |
 | `existence.never_count` | rule | Sources that never count (the export's own name). |
 | `existence.groups` | rule | Independence groups: `label` (in «Источники» / «Основания»), `column` (the `src_*` flag), `sources`, and optionally `checks` (clause order inside the group). |
-| `existence.exclude` | rule | `(source, origin)` pairs that are another group's record: an eligible row matching one is dropped silently. `origin` is compared exactly, case-folded. |
+| `existence.exclude` | rule | Records an aggregator built only from another group's source: `source`, `only` (datasets), `ignore` (the aggregator's own name), `sep`. A row of `source` whose `origin` tokens, minus `ignore`, are all in `only` is dropped silently if it would have counted. |
 | `reasons.*` | rule | Separators, the « \|\| против/не найдено: » intro, the "no sources" text, and `con_order` (by check) of the not-counted clauses. |
 | `query` | `yandex_queue` | Which objects our own query could still decide: fewer than `min_sources` groups besides `group`, and no counted row of `skip_checks`; written as `column` of the decided table. |
 | `how` | rule | A "how was it reached" text (`yandex_how`): per check, the row field (`key`) whose value picks a text. |
@@ -62,16 +62,12 @@ category-specific code; `catering.py` only names its block.
 
 ## Deviations from the three-axes default (kept for parity)
 
-The archive's behaviour is reproduced exactly; where it departs from the
-default rule (`docs/ARCHITECTURE.md`, «Три оси»), the config says so in a
-`PARITY` comment:
+Where the config reproduces the archive against the default rule
+(`docs/ARCHITECTURE.md`, «Три оси»), it says so in a `PARITY` comment:
 
 - `kind.vote_identity: [strong, weak]` — FSQ / Overture records another object
   won (`exclusive` → weak) still vote on the kind, as in the archive.
-- `existence.exclude: overture/foursquare` — the archive meant to fold
-  Foursquare-built Overture places into Foursquare, but tested
-  `ov_dataset == "foursquare"` while Overture writes `Foursquare|Overture`, so
-  the rule never fired: 21 objects count Overture on such a place. The exact
-  comparison keeps that; `origin: "foursquare|overture"` would make it fire.
-- `deliver.front[Общепит?].write: false` — the archive wrote the «Общепит?»
-  header but never its values; the delivered column is empty.
+
+Fixed on 2026-10-30 (`docs/changes/2026-10-30-overture-fsq-and-food-column.md`):
+the Foursquare-only Overture place no longer counts (`existence.exclude`), and
+«Общепит?» is written into the delivered sheet.

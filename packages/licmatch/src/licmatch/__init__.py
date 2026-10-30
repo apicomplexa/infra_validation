@@ -35,27 +35,85 @@ two floors rather than one, and what the result may and may not be read as -- is
 """
 from __future__ import annotations
 
-from .geo import EARTH_R_M, haversine_m
 from .agree import VENUE_WORDS, agree_matrix, is_generic_name, latin, names_agree
 from .brands import BRAND_DEFAULTS, BrandParams, BrandResult, learn_brands
-from .names import (GENERIC_FASCIAS, RU_RETAIL_ALIASES, SHORT_NAME_MARKER,
-                    TRADE_AND_LEGAL_NOISE, brand_key, fascia_name, holder_name,
-                    is_generic, name_key)
-from .scoring import (DEFAULTS, NAME_ALIAS, NAME_FUZZY, NAME_GENERIC, NAME_KINDS,
-                      ROUTE_ADDR, ROUTE_GEO, ROUTE_NAMES, ROUTE_NONE,
-                      SIDE_COLUMNS, MatchParams, Scores, accepted, pair_score,
-                      score_matrix, side)
+from .geo import EARTH_R_M, haversine_m
+from .names import (
+                    GENERIC_FASCIAS,
+                    RU_RETAIL_ALIASES,
+                    SHORT_NAME_MARKER,
+                    TRADE_AND_LEGAL_NOISE,
+                    brand_key,
+                    fascia_name,
+                    holder_name,
+                    is_generic,
+                    name_key,
+)
+from .scoring import (
+                    DEFAULTS,
+                    NAME_ALIAS,
+                    NAME_FUZZY,
+                    NAME_GENERIC,
+                    NAME_KINDS,
+                    ROUTE_ADDR,
+                    ROUTE_GEO,
+                    ROUTE_NAMES,
+                    ROUTE_NONE,
+                    SIDE_COLUMNS,
+                    MatchParams,
+                    Scores,
+                    accepted,
+                    pair_score,
+                    score_matrix,
+                    side,
+)
 from .select import PREFER_LIFT, Selection, claimed_keys, greedy_assign, select
-from .stages import (C_ADDRESS, C_ARCHIVED, C_BRAND, C_EXCLUSIVE, C_IN_FORCE, C_KIND,
-                     C_KIND_OR_HOLDER, C_NAME, C_NEAR, C_WRONG_KIND, ELSEWHERE, INACTIVE,
-                     NONE, OTHER_CHAIN, OTHER_HOLDER, OWN, RESULT_COLUMNS, STATUSES, TAKEN,
-                     WRONG_KIND, Archived, Brands, Entities, Exclusive, Kinds, MatchResult,
-                     Policy, Rung, Tally, match)
+from .stages import (
+                    C_ADDRESS,
+                    C_ARCHIVED,
+                    C_BRAND,
+                    C_EXCLUSIVE,
+                    C_IN_FORCE,
+                    C_KIND,
+                    C_KIND_OR_HOLDER,
+                    C_NAME,
+                    C_NEAR,
+                    C_WRONG_KIND,
+                    ELSEWHERE,
+                    INACTIVE,
+                    NONE,
+                    OTHER_CHAIN,
+                    OTHER_HOLDER,
+                    OWN,
+                    RESULT_COLUMNS,
+                    STATUSES,
+                    TAKEN,
+                    WRONG_KIND,
+                    Archived,
+                    Brands,
+                    Entities,
+                    Exclusive,
+                    Kinds,
+                    MatchResult,
+                    Policy,
+                    Rung,
+                    Tally,
+                    match,
+)
 from .text import fold, stem, stem_all, words
-from .toponym import (TYPE_TABLE, Toponym, address_score, home_city_re,
-                      house_parts, house_similarity, parse_address_fields,
-                      parse_address_line, settlement_name, street_similarity,
-                      street_toponym)
+from .toponym import (
+                    TYPE_TABLE,
+                    Toponym,
+                    address_score,
+                    home_city_re,
+                    house_parts,
+                    house_similarity,
+                    parse_address_fields,
+                    parse_address_line,
+                    settlement_name,
+                    street_similarity,
+                    street_toponym,
+)
 
 __version__ = "1.2.0"
 

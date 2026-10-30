@@ -121,13 +121,14 @@ categories:
         - {label: "Foursquare", column: src_fsq, sources: [fsq]}
         - {label: "Администрация", column: src_arkh, sources: [arkh_admin]}
         - {label: "ЕГАИС", column: src_egais, sources: [egais]}
-      # (source, origin) pairs that are another group's record. PARITY: the
-      # archive tested `ov_dataset.lower() == "foursquare"`, but Overture's
-      # `datasets` is always "Foursquare|Overture", so the rule never fired and
-      # the Foursquare-built Overture places count as Overture (21 objects). The exact,
-      # case-folded comparison keeps that (deviation, see config/README.md).
+      # Records an aggregator built only from another group's source. An
+      # Overture place whose datasets are Foursquare alone ("Foursquare|Overture")
+      # is Foursquare, which counts under its own freshness rule (FSQ direct),
+      # never as a second source beside it. Fixed 2026-10-30: the archive compared
+      # the whole string with "foursquare" and never matched
+      # (docs/changes/2026-10-30-overture-fsq-and-food-column.md).
       exclude:
-        - {source: overture, origin: foursquare}
+        - {source: overture, only: [foursquare], ignore: [overture], sep: "|"}
 
     reasons:
       pro_sep: " | "
@@ -218,10 +219,9 @@ categories:
       front:
         - {title: "Подтверждено", column: confirmed, width: 14}
         - {title: "Основания", column: reasons, width: 70}
-        # PARITY: the archive wrote this header but never its values (its
-        # write loop fills columns 1-2 only), so the column is empty in every
-        # delivered file. `write: true` fills it (deviation, see config/README.md).
-        - {title: "Общепит?", column: food, width: 14, write: false}
+        # Filled since 2026-10-30; the archive wrote the header only
+        # (docs/changes/2026-10-30-overture-fsq-and-food-column.md).
+        - {title: "Общепит?", column: food, width: 14}
       appended_width: 22
       # Columns appended after the contractor's: [title, decided-table column].
       appended:

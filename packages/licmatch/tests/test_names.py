@@ -3,8 +3,7 @@ from __future__ import annotations
 
 import unittest
 
-from licmatch import (GENERIC_FASCIAS, brand_key, fascia_name, is_generic,
-                      name_key)
+from licmatch import GENERIC_FASCIAS, brand_key, fascia_name, is_generic, name_key
 
 
 class TestBrandKey(unittest.TestCase):

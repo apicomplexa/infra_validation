@@ -33,14 +33,13 @@ Choice has two optional constraints, both off by default:
 """
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Mapping, Sequence
 
 import numpy as np
 import pandas as pd
 
-from .scoring import (DEFAULTS, NAME_KINDS, ROUTE_NAMES, MatchParams, Scores,
-                      accepted)
+from .scoring import DEFAULTS, NAME_KINDS, ROUTE_NAMES, MatchParams, Scores, accepted
 
 # How far a preferred counterpart is lifted above a non-preferred one.  Any
 # value above the score range (0..1) has the same effect; 2.0 keeps the lifted

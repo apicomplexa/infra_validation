@@ -1,0 +1,434 @@
+---
+title: "Архитектура конвейера проверок"
+lang: ru
+format:
+  html:
+    css: architecture.css
+    toc: true
+    toc-title: "Разделы"
+    number-sections: false
+    code-fold: false
+---
+
+Как объект из выгрузки подрядчика проходит через модули проверок и правило категории и становится колонками «Подтверждено», «Вид?» и «Основания». На каждом шаге указано, какая таблица передаётся дальше и какие в ней поля.
+
+Архитектура принята и реализуется в этом репозитории; письменная спецификация лежит в `docs/ARCHITECTURE.md`, этот документ дополняет её схемами. Пороги и примеры взяты из финальной версии (прогон 2026-10-29) и v4. Данные: входы в `data/raw/final/`, снимки в `resources/overture/`, `resources/foursquare/`, `resources/egais/`, кэш Яндекса в `resources/cache/yandex/`, настройки в `config/config.yaml` и `config/deliveries.tsv`.
+
+## Общий поток {#flow}
+
+Слева направо: стандартизованные входы, независимые модули проверок, единая таблица находок `Evidence`, правило категории и выход. Проверки не знают о категориях: их режим задаёт `Policy` из конфига категории.
+
+::: {.arch}
+
+```{=html}
+<div class="legend" aria-label="Обозначения">
+  <span><i style="border-color:var(--c-data)"></i>данные и таблицы</span>
+  <span><i style="border-color:var(--c-check)"></i>модуль проверки</span>
+  <span><i style="border-color:var(--c-lm)"></i>пакет licmatch</span>
+  <span><i style="border-color:var(--c-cat)"></i>правило категории</span>
+  <span><svg width="30" height="10" aria-hidden="true"><line x1="0" y1="5" x2="30" y2="5" stroke="currentColor" stroke-width="1.4" stroke-dasharray="5 4"/></svg>параметры из конфига</span>
+</div>
+<div class="frame">
+      <svg viewBox="0 0 1200 680" role="img" aria-label="Поток данных: выгрузка приводится к ObjectTable и объектам; шесть модулей проверок читают свои источники и пишут строки Evidence; правило категории считает независимые сильные находки и пишет Подтверждено, Вид и Основания в копию XLSX.">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+          </marker>
+        </defs>
+
+        <!-- input chain -->
+        <rect class="box r-data" x="16" y="24" width="190" height="56" rx="6"/>
+        <text class="t" x="30" y="47">Выгрузка подрядчика</text>
+        <text class="s" x="30" y="65">XLSX · город × категория</text>
+
+        <rect class="box r-data" x="236" y="24" width="180" height="56" rx="6"/>
+        <text class="t" x="250" y="47">Адаптер входа</text>
+        <text class="s" x="250" y="65">правило Snakemake на формат</text>
+
+        <rect class="box r-data" x="446" y="24" width="200" height="56" rx="6"/>
+        <text class="t" x="460" y="47">Сущности</text>
+        <text class="s" x="460" y="65">строки → объекты (entity_id)</text>
+
+        <line class="arr" x1="206" y1="52" x2="233" y2="52" marker-end="url(#ah)"/>
+        <line class="arr" x1="416" y1="52" x2="443" y2="52" marker-end="url(#ah)"/>
+        <line class="arr" x1="546" y1="80" x2="546" y2="137" marker-end="url(#ah)"/>
+        <text class="lbl" x="554" y="104">ObjectTable</text>
+        <text class="lbl" x="554" y="118">одна строка на объект</text>
+
+        <!-- config -->
+        <rect class="box r-cat" x="900" y="24" width="284" height="56" rx="6"/>
+        <text class="t" x="914" y="47">config.yaml · блок категории</text>
+        <text class="s" x="914" y="65">пороги, режимы, независимость, N</text>
+        <path class="arr pol" d="M900 70 H604 V137" marker-end="url(#ah)"/>
+        <text class="lbl" x="700" y="63">Policy каждой проверки</text>
+        <path class="arr pol" d="M1040 80 V147" marker-end="url(#ah)"/>
+        <text class="lbl" x="1048" y="112">N, таблица независимости,</text>
+        <text class="lbl" x="1048" y="126">слова профиля</text>
+
+        <!-- checks group -->
+        <rect class="grp r-check" x="240" y="140" width="380" height="520" rx="10"/>
+        <text class="g" x="256" y="162">checks/* · каждая получает ObjectTable и свою Policy</text>
+
+        <rect class="box r-check" x="260" y="176" width="330" height="50" rx="6"/>
+        <text class="t" x="274" y="196">providers · OSM / 2GIS</text>
+        <text class="s" x="274" y="213">флаги выгрузки + relink ≤ 50 м (20 м общее имя)</text>
+
+        <rect class="box r-check" x="260" y="240" width="330" height="50" rx="6"/>
+        <text class="t" x="274" y="260">arkh_admin</text>
+        <text class="s" x="274" y="277">реестр администрации города</text>
+
+        <rect class="box r-check" x="260" y="304" width="330" height="50" rx="6"/>
+        <text class="t" x="274" y="324">yandex</text>
+        <text class="s" x="274" y="341">≤ 150 м (60 м общее имя), имя ≥ 72</text>
+
+        <rect class="box r-check" x="260" y="368" width="330" height="50" rx="6"/>
+        <text class="t" x="274" y="388">overture</text>
+        <text class="s" x="274" y="405">≤ 150 м, confidence ≥ 0,5, имя ≥ 85</text>
+
+        <rect class="box r-check" x="260" y="432" width="330" height="50" rx="6"/>
+        <text class="t" x="274" y="452">foursquare</text>
+        <text class="s" x="274" y="469">имя ≥ 85, обновлено с 2022 г., не закрыто</text>
+
+        <rect class="box r-check" x="260" y="496" width="330" height="148" rx="6"/>
+        <text class="t" x="274" y="516">egais · адаптер ЕГАИС</text>
+        <text class="s" x="274" y="533">MatchResult → Evidence (статус → identity)</text>
+        <rect class="box r-lm lmfill" x="276" y="546" width="298" height="86" rx="5"/>
+        <text class="m" x="288" y="567" style="fill:var(--ink)">licmatch.match(objects, register, policy)</text>
+        <text class="s" x="288" y="590">кандидаты → оценка → допуск →</text>
+        <text class="s" x="288" y="607">назначение → объяснение</text>
+        <text class="s" x="288" y="624">подробно на схеме ниже</text>
+
+        <!-- sources -->
+        <rect class="box r-data" x="16" y="176" width="190" height="50" rx="6"/>
+        <text class="t" x="28" y="196">Выгрузка: OSM, GIS</text>
+        <text class="s" x="28" y="213">флаги и ссылки на записи</text>
+
+        <rect class="box r-data" x="16" y="240" width="190" height="50" rx="6"/>
+        <text class="t" x="28" y="260">Выгрузка: Arkh_admin</text>
+        <text class="s" x="28" y="277">колонка реестра города</text>
+
+        <rect class="box r-data" x="16" y="304" width="190" height="50" rx="6"/>
+        <text class="t" x="28" y="324">Кэш Яндекса</text>
+        <text class="s" x="28" y="341">jsonl · сеть отдельной задачей</text>
+
+        <rect class="box r-data" x="16" y="368" width="190" height="50" rx="6"/>
+        <text class="t" x="28" y="388">Overture Places</text>
+        <text class="s" x="28" y="405">parquet · релиз 2026-10-21.0</text>
+
+        <rect class="box r-data" x="16" y="432" width="190" height="50" rx="6"/>
+        <text class="t" x="28" y="452">FSQ OS Places</text>
+        <text class="s" x="28" y="469">parquet · релиз 2026-10-15</text>
+
+        <rect class="box r-data" x="16" y="496" width="190" height="50" rx="6"/>
+        <text class="t" x="28" y="516">Реестр ФСРАР</text>
+        <text class="s" x="28" y="533">ZIP · 1,66 млн записей</text>
+
+        <rect class="box r-data" x="16" y="590" width="190" height="54" rx="6"/>
+        <text class="t" x="28" y="611">Адаптер реестра</text>
+        <text class="s" x="28" y="629">→ RegisterTable</text>
+        <line class="arr" x1="111" y1="546" x2="111" y2="587" marker-end="url(#ah)"/>
+        <text class="lbl" x="119" y="571">разбор, город</text>
+
+        <line class="arr" x1="206" y1="201" x2="257" y2="201" marker-end="url(#ah)"/>
+        <line class="arr" x1="206" y1="265" x2="257" y2="265" marker-end="url(#ah)"/>
+        <line class="arr" x1="206" y1="329" x2="257" y2="329" marker-end="url(#ah)"/>
+        <line class="arr" x1="206" y1="393" x2="257" y2="393" marker-end="url(#ah)"/>
+        <line class="arr" x1="206" y1="457" x2="257" y2="457" marker-end="url(#ah)"/>
+        <line class="arr" x1="206" y1="617" x2="273" y2="617" marker-end="url(#ah)"/>
+        <text class="lbl" x="214" y="193">читает</text>
+
+        <!-- evidence -->
+        <rect class="box r-data" x="650" y="176" width="190" height="468" rx="6"/>
+        <text class="t" x="664" y="200">Evidence</text>
+        <text class="s" x="664" y="217">строка = объект × источник</text>
+        <line class="div" x1="664" y1="230" x2="826" y2="230"/>
+        <text class="m" x="664" y="252">object_id</text>
+        <text class="m" x="664" y="274">source</text>
+        <text class="m" x="664" y="296" style="fill:var(--ink)">identity</text>
+        <text class="m" x="664" y="318" style="fill:var(--ink)">record_state</text>
+        <text class="m" x="664" y="340" style="fill:var(--ink)">exists</text>
+        <text class="m" x="664" y="362" style="fill:var(--ink)">kind</text>
+        <text class="m" x="664" y="384">distance_m</text>
+        <text class="m" x="664" y="406">name_score</text>
+        <text class="m" x="664" y="428">ref</text>
+        <text class="m" x="664" y="450">note</text>
+        <line class="div" x1="664" y1="472" x2="826" y2="472"/>
+        <text class="s" x="664" y="494">один формат</text>
+        <text class="s" x="664" y="510">у всех проверок</text>
+
+        <line class="arr" x1="590" y1="201" x2="647" y2="201" marker-end="url(#ah)"/>
+        <line class="arr" x1="590" y1="265" x2="647" y2="265" marker-end="url(#ah)"/>
+        <line class="arr" x1="590" y1="329" x2="647" y2="329" marker-end="url(#ah)"/>
+        <line class="arr" x1="590" y1="393" x2="647" y2="393" marker-end="url(#ah)"/>
+        <line class="arr" x1="590" y1="457" x2="647" y2="457" marker-end="url(#ah)"/>
+        <line class="arr" x1="590" y1="570" x2="647" y2="570" marker-end="url(#ah)"/>
+        <text class="lbl" x="596" y="193">пишет</text>
+
+        <!-- category rule -->
+        <rect class="grp r-cat" x="866" y="150" width="328" height="346" rx="10"/>
+        <text class="g" x="882" y="172">categories/catering.py, alcohol.py …</text>
+
+        <rect class="box r-cat" x="882" y="184" width="296" height="96" rx="6"/>
+        <text class="t" x="896" y="206">«Подтверждено» · существование</text>
+        <text class="s" x="896" y="225">считает независимые находки, где</text>
+        <text class="m" x="896" y="243">identity=strong, record_state=current</text>
+        <text class="s" x="896" y="263">≥ N источников → 1, иначе 0</text>
+
+        <rect class="box r-cat" x="882" y="294" width="296" height="84" rx="6"/>
+        <text class="t" x="896" y="316">«Вид?» · Общепит? / Алкоголь? …</text>
+        <text class="s" x="896" y="335">свод поля kind по сильным находкам:</text>
+        <text class="s" x="896" y="353">да / нет / противоречие / автомат /</text>
+        <text class="s" x="896" y="369">нет данных</text>
+
+        <rect class="box r-cat" x="882" y="392" width="296" height="88" rx="6"/>
+        <text class="t" x="896" y="414">«Основания»</text>
+        <text class="s" x="896" y="433">ref и note засчитанных находок;</text>
+        <text class="s" x="896" y="451">после « || » — найденное, но не</text>
+        <text class="s" x="896" y="467">засчитанное, и чего не нашли</text>
+
+        <line class="arr" x1="840" y1="330" x2="863" y2="330" marker-end="url(#ah)"/>
+
+        <!-- output -->
+        <rect class="box r-data" x="882" y="540" width="296" height="104" rx="6"/>
+        <text class="t" x="896" y="563">Выход поставки</text>
+        <text class="s" x="896" y="583">копия XLSX: три колонки спереди,</text>
+        <text class="s" x="896" y="600">доказательства в конце, лист-легенда;</text>
+        <text class="s" x="896" y="617">_summary.txt; отчёт validation.qmd</text>
+        <line class="arr" x1="1030" y1="496" x2="1030" y2="537" marker-end="url(#ah)"/>
+      </svg>
+</div>
+```
+
+:::
+
+Каждая проверка независима: получает одни и те же объекты и свои параметры и пишет строки одного формата. Сеть нужна только задаче, пополняющей кэш Яндекса, и загрузке снимков; сам конвейер работает офлайн. ЕГАИС отличается лишь тем, что сопоставление делает пакет `licmatch`, а модуль `egais` переводит его результат в `Evidence`.
+
+## Внутри licmatch {#licmatch}
+
+Чистая функция `match(objects, register, policy) → MatchResult`: без сети, файлов и глобальных констант. Логика v4 и финальной версии — это одни и те же пять шагов, у которых по-разному настроена `Policy`.
+
+::: {.arch}
+
+```{=html}
+<div class="frame">
+      <svg viewBox="0 0 1200 330" role="img" aria-label="Пять шагов licmatch: кандидаты, оценка, допуск, назначение, объяснение. Между шагами передаются пары, Scores, маски допуска и Selection; на выходе MatchResult по одной строке на объект.">
+        <defs>
+          <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+          </marker>
+        </defs>
+        <text class="lbl" x="16" y="30">вход: ObjectTable × RegisterTable + Policy</text>
+        <line class="arr" x1="114" y1="38" x2="114" y2="57" marker-end="url(#ah2)"/>
+
+        <rect class="box r-lm" x="16" y="60" width="196" height="150" rx="6"/>
+        <text class="t" x="30" y="84">1 · Кандидаты</text>
+        <text class="s" x="30" y="106">пары в пределах max_m</text>
+        <text class="s" x="30" y="122">(100 м);</text>
+        <text class="s" x="30" y="138">без координаты — маршрут</text>
+        <text class="s" x="30" y="154">только по адресу</text>
+        <line class="div" x1="30" y1="172" x2="198" y2="172"/>
+        <text class="m" x="30" y="192">max_m, addr_route_*</text>
+
+        <rect class="box r-lm" x="259" y="60" width="196" height="150" rx="6"/>
+        <text class="t" x="273" y="84">2 · Оценка</text>
+        <text class="s" x="273" y="106">0,50·адрес + 0,20·имя</text>
+        <text class="s" x="273" y="122">+ 0,30·расстояние;</text>
+        <text class="s" x="273" y="138">адрес — топонимы поле</text>
+        <text class="s" x="273" y="154">за полем, имя — max по полям</text>
+        <line class="div" x1="273" y1="172" x2="441" y2="172"/>
+        <text class="m" x="273" y="192">w_*, name_fields</text>
+
+        <rect class="box r-lm" x="502" y="60" width="196" height="150" rx="6"/>
+        <text class="t" x="516" y="84">3 · Допуск</text>
+        <text class="s" x="516" y="106">score ≥ 0,45 и адрес ≥ 0,72;</text>
+        <text class="s" x="516" y="122">вид записи допустим;</text>
+        <text class="s" x="516" y="138">действует; правило имени;</text>
+        <text class="s" x="516" y="154">правило брендов</text>
+        <line class="div" x1="516" y1="172" x2="684" y2="172"/>
+        <text class="m" x="516" y="192">kinds, name_policy</text>
+
+        <rect class="box r-lm" x="745" y="60" width="196" height="150" rx="6"/>
+        <text class="t" x="759" y="84">4 · Назначение</text>
+        <text class="s" x="759" y="106">точка = ИНН @ адрес</text>
+        <text class="s" x="759" y="122">[@ заведение];</text>
+        <text class="s" x="759" y="138">жадно, сильнейший первым;</text>
+        <text class="s" x="759" y="154">проигравший → taken</text>
+        <line class="div" x1="759" y1="172" x2="927" y2="172"/>
+        <text class="m" x="759" y="192">unit, brands</text>
+
+        <rect class="box r-lm" x="988" y="60" width="196" height="150" rx="6"/>
+        <text class="t" x="1002" y="84">5 · Объяснение</text>
+        <text class="s" x="1002" y="106">лучший отвергнутый</text>
+        <text class="s" x="1002" y="122">кандидат и условие</text>
+        <text class="s" x="1002" y="138">допуска, которое он</text>
+        <text class="s" x="1002" y="154">не прошёл</text>
+        <line class="div" x1="1002" y1="172" x2="1170" y2="172"/>
+        <text class="m" x="1002" y="192">archived</text>
+
+        <line class="arr" x1="212" y1="135" x2="256" y2="135" marker-end="url(#ah2)"/>
+        <text class="lbl" x="218" y="127">пары</text>
+        <line class="arr" x1="455" y1="135" x2="499" y2="135" marker-end="url(#ah2)"/>
+        <text class="lbl" x="459" y="127">Scores</text>
+        <line class="arr" x1="698" y1="135" x2="742" y2="135" marker-end="url(#ah2)"/>
+        <text class="lbl" x="703" y="127">маски</text>
+        <line class="arr" x1="941" y1="135" x2="985" y2="135" marker-end="url(#ah2)"/>
+        <text class="lbl" x="943" y="127">Selection</text>
+
+        <line class="arr" x1="1086" y1="210" x2="1086" y2="247" marker-end="url(#ah2)"/>
+        <rect class="box r-data" x="16" y="250" width="1168" height="64" rx="6"/>
+        <text class="t" x="30" y="274">MatchResult · одна строка на объект</text>
+        <text class="m" x="30" y="296">record_id · status: own | taken | other_holder | inactive | wrong_kind | elsewhere | none · addr / name / dist / score · method · claimed_by · margin · near_miss · failed_rule</text>
+      </svg>
+</div>
+```
+
+:::
+
+Шаги 3 и 5 используют один и тот же список условий допуска. Объяснение получается автоматически: у лучшего отвергнутого кандидата указывается условие, которое он не прошёл. Моноширинной строкой внизу каждого шага перечислены ключи `Policy`, которые этот шаг читает. Русские тексты «Оснований» пакет не пишет, это делает модуль `egais`.
+
+| Режим Policy | Шаг | Общепит (финальная версия) | Алкоголь (режим v4) |
+|:-------------|:----|:---------------------------|:--------------------|
+| `kinds` | 3 | catering | на вынос → retail; на месте → catering |
+| `name_policy` | 3 | `required`: имя обязано совпасть | `tiebreak`: имя только выбирает между кандидатами |
+| `name_fields` | 2 | владелец и заведение из текста адреса | владелец |
+| `brands` | 3, 4 | `off`: франшизы | `learned`: алиасы + выученные пары вывеска → ИНН |
+| `unit` | 4 | ИНН @ адрес @ заведение | ИНН @ адрес, общий для слоёв алкоголя и табака |
+| `archived` | 3, 5 | не засчитывается | своя, только если совпало имя |
+
+::: {.callout-note}
+## Проверка разбиения
+
+Одна функция в двух конфигурациях должна воспроизвести 58 лицензий общепита из финальной версии и распределение статусов v4 по алкоголю (350 / 155 / 64 / 114 / 83 / 179). Если для этого внутри шага понадобится ветка «если v4», значит, шаги выделены неверно.
+:::
+
+## Три оси и подсчёт {#axes}
+
+Каждая находка отвечает на три вопроса. **Существование**: есть ли объект. **Вид**: того ли он вида, что в выгрузке. **Принадлежность** (`identity`): найденная запись — это именно наш объект? Принадлежность — условие для первых двух: при слабой связи источник говорит о месте, а не об объекте. Свежесть записи — отдельное поле (`record_state`), потому что сильная связь с записью 2014 года существования не доказывает.
+
+::: {.arch}
+
+```{=html}
+<div class="tw">
+  <table class="matrix">
+    <thead><tr><th>identity ↓ · record_state →</th><th>current</th><th>stale</th><th>closed</th><th>inactive</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>strong</strong><br><small>запись — это объект</small></td>
+        <td><div class="cell"><span class="pill ok"><b>✓</b>засчитана</span><small>по существованию и по виду; один раз среди независимых</small></div></td>
+        <td><div class="cell"><span class="pill note"><b>·</b>после « || »</span><small>FSQ с последним обновлением в 2013–2016 гг.: 184 таких объекта</small></div></td>
+        <td><div class="cell"><span class="pill no"><b>✗</b>довод против</span><small>«Больше не работает» в Яндексе: не засчитывается никогда</small></div></td>
+        <td><div class="cell"><span class="pill note"><b>·</b>после « || »</span><small>лицензия общепита с тем же именем по адресу не действует</small></div></td>
+      </tr>
+      <tr>
+        <td><strong>weak</strong><br><small>запись о месте, не об объекте</small></td>
+        <td colspan="4"><div class="cell"><span class="pill note"><b>·</b>после « || », о месте</span><small>Яндекс <code>ambiguous</code>: общая вывеска у занятой двери. «Найдено» подрядчика: «Tupperware» нашёлся потому, что «Йоко суши» в том же здании. ЕГАИС: действующая лицензия по адресу есть, но у другого владельца. Режим <code>tiebreak</code> без совпадения имени.</small></div></td>
+      </tr>
+      <tr>
+        <td><strong>none</strong><br><small>ничего не найдено</small></td>
+        <td colspan="4"><div class="cell"><span class="pill note"><b>·</b>после « || »: искали, не нашли</span><small>в тексте указано, что и где искали, чтобы строку можно было проверить вручную</small></div></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+```
+
+:::
+
+### Что ещё влияет на уверенность
+
+- **Надёжность источника по оси** — свойство источника, задаётся в конфиге. Страницы Meta в Overture — слабый тип источника; дескриптор 2GIS говорит о виде точнее категории Overture.
+- **Независимость** — свойство пары источников. Место Overture, собранное только из FSQ, считается за FSQ; Яндекс считается одним источником, как бы его ни нашли; переклеенная запись OSM↔2GIS засчитывается этому провайдеру один раз.
+
+### Почему уровни, а не вероятности
+
+Проект держится принципа «правило, а не модель». Откалибровать вероятности не на чем: эталон 2022 г. покрывает 15,6 % города, и то его лёгкую часть (точность 0,925 на `exact` против 0,700 на `probable`).
+
+## Сущности и поля {#entities}
+
+Пять таблиц, которыми обмениваются слои. Адаптеры приводят к ним любой вход, и дальше по конвейеру формат входа уже не виден.
+
+### ObjectTable
+
+Пишут адаптер входа и шаг сущностей. Одна строка на объект, а не на строку выгрузки: в Архангельске 2 500 строк дают 1 141 объект.
+
+| Поле | Смысл |
+|:-----|:------|
+| `object_id` | ключ объекта |
+| `entity_id` | одна вывеска в одной точке под разными типами |
+| `name`, `address_line` | как в выгрузке; город отрезан |
+| `lat`, `lon`, `city` | координата и город (регион Яндекса берётся из `deliveries.tsv`) |
+| `category` | класс выгрузки, не наш вывод |
+
+### RegisterTable
+
+Пишет адаптер реестра. Стандартный вид, который понимает `licmatch`; новый реестр — это только новый адаптер.
+
+| Поле | Смысл |
+|:-----|:------|
+| `record_id` | номер лицензии + строка |
+| `holder_id`, `holder_name` | ИНН и название владельца |
+| `venue_name` | заведение из текста адреса («ресторан "Йоко"»), может быть пустым |
+| `address_line` или `street`, `house`, `block` | любая из двух форм |
+| `lat`, `lon`, `coord_precision_m` | у 47 % записей нет координаты; DMS ≈ 31 м |
+| `in_force`, `valid_from`, `status_changed` | жизненный цикл записи |
+| `kind` | `catering`, `retail`, … |
+
+### MatchResult
+
+Выход `licmatch.match`. Только коды и числа, без текста.
+
+| Поле | Смысл |
+|:-----|:------|
+| `record_id` | выбранная запись или пусто |
+| `status` | `own`, `taken`, `other_holder`, `inactive`, `wrong_kind`, `elsewhere`, `none` |
+| `addr`, `name`, `dist`, `score` | три слагаемых и сумма |
+| `method` | `geo`, `address` |
+| `claimed_by`, `margin` | кто забрал точку и с каким перевесом |
+| `near_miss`, `failed_rule` | лучший отвергнутый кандидат и непройденное условие |
+
+### Evidence
+
+Выход любой проверки. Одна строка на пару объект × источник.
+
+| Поле | Смысл |
+|:-----|:------|
+| `source` | `osm`, `2gis`, `arkh_admin`, `yandex`, `overture`, `fsq`, `egais` |
+| `identity` | `strong`, `weak`, `none` — связь записи с объектом |
+| `record_state` | `current`, `stale`, `closed`, `inactive` |
+| `exists` | что запись говорит о существовании |
+| `kind` | `yes`, `no`, `unknown` + исходная рубрика |
+| `distance_m`, `name_score` | для проверки на глаз |
+| `ref`, `note` | ссылка, ID или номер лицензии; короткая причина |
+
+### Как статус licmatch переходит в Evidence
+
+| status | identity | record_state | kind | что пишется в «Основания» |
+|:-------|:---------|:-------------|:-----|:--------------------------|
+| `own` | strong | current | yes (вид лицензии = вид объекта) | номер лицензии, владелец, по какому полю совпало имя |
+| `inactive` | strong | inactive | unknown | после « \|\| »: «лицензия с тем же именем не действует (дата)» |
+| `taken` | weak | current | unknown | после « \|\| »: «закреплена за объектом …» |
+| `other_holder` | weak | current | unknown | после « \|\| »: «по адресу есть, но другого владельца» |
+| `wrong_kind` | weak | current | no для этой категории | после « \|\| »: «по адресу только розничная лицензия» |
+| `elsewhere` | weak | current | unknown | после « \|\| »: «с тем же именем в 80 м, другой адрес» |
+| `none` | none | — | unknown | после « \|\| »: что искали |
+
+## Конфиг категории {#policy}
+
+Всё, что меняет результат, лежит в `config/config.yaml` блоком на категорию и проверяется JSON-схемой. Код категории только применяет правило к таблице `Evidence`.
+
+| Ключ | Кто читает | Общепит сейчас | Смысл |
+|:-----|:-----------|:---------------|:------|
+| `min_sources` | правило категории | 2 | порог N для «Подтверждено» |
+| `independence` | правило категории | overture[fsq] → fsq; yandex ×1 | какие находки считаются одним источником |
+| `profile.words` | правило вида | вендинг → не место → общепит → магазин | порядок регэкспов и есть правило |
+| `checks.yandex` | yandex | near 150, generic 60, name 72 | радиусы и порог имени |
+| `checks.overture` | overture | conf 0,5, name 85 | строже Яндекса: AllThePlaces — это сети |
+| `checks.foursquare` | foursquare | fresh 2022-01-01, name 85 | старые записи идут после « \|\| » |
+| `checks.providers` | providers | relink 50 / 20 м | одолжить провайдера соседней записи |
+| `checks.egais` | egais → licmatch | см. таблицу режимов выше | Policy для `licmatch.match` |
+
+::: {.callout-note}
+## Открытые вопросы
+
+Засчитывать ли в алкоголе находки режима `tiebreak` с `identity = strong`, или для «Подтверждено» требовать совпадения имени, как в общепите. Реестры для остальных классов таксономии обсуждаем отдельно.
+:::

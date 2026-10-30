@@ -1,0 +1,72 @@
+/* Styles for docs/architecture.qmd. Everything is scoped under .arch so the
+   cosmo theme is untouched. Colour tokens follow the page theme. */
+.arch {
+  --a-surface: #fcfcfb;
+  --a-ink: #141413;
+  --a-ink2: #52514e;
+  --a-muted: #7d7b75;
+  --a-line: #d9d8d1;
+  --a-wash: #ecebe5;
+  --c-data: #2a78d6;   /* данные и таблицы */
+  --c-check: #eb6834;  /* модули проверок */
+  --c-lm: #1baf7a;     /* пакет licmatch */
+  --c-cat: #eda100;    /* правило категории */
+  --good: #0ca30c;
+  --against: #d03b3b;
+}
+/* The cosmo page is light only, so the diagrams follow the page, not the OS.
+   The dark tokens apply only if a dark Quarto theme is switched on. */
+body.quarto-dark .arch {
+  --a-surface: #1a1a19; --a-ink: #f0efec; --a-ink2: #c3c2b7; --a-muted: #94928a;
+  --a-line: #3a3a37; --a-wash: #242422;
+  --c-data: #3987e5; --c-check: #d95926; --c-lm: #199e70; --c-cat: #c98500;
+  --good: #0ca30c; --against: #e66767;
+}
+
+.arch .legend { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 13.5px; margin-bottom: 1rem; }
+.arch .legend span { display: inline-flex; align-items: center; gap: 8px; }
+.arch .legend i { width: 14px; height: 14px; border-radius: 3px; border: 2px solid; display: inline-block; }
+
+.arch .frame {
+  overflow-x: auto; background: var(--a-surface); border: 1px solid var(--a-line);
+  border-radius: 10px; padding: 12px; margin-bottom: 0.5rem;
+}
+.arch .frame svg { display: block; width: 100%; height: auto; min-width: 940px; color: var(--a-ink2); }
+
+/* diagram parts */
+.arch svg .box { fill: var(--a-surface); stroke-width: 1.6; }
+.arch svg .grp { fill: none; stroke-width: 1.3; stroke-dasharray: 6 5; }
+.arch svg .r-data { stroke: var(--c-data); }
+.arch svg .r-check { stroke: var(--c-check); }
+.arch svg .r-lm { stroke: var(--c-lm); }
+.arch svg .r-cat { stroke: var(--c-cat); }
+.arch svg .lmfill { fill: var(--a-wash); }
+.arch svg .t { fill: var(--a-ink); font-size: 13px; font-weight: 600; }
+.arch svg .s { fill: var(--a-ink2); font-size: 11.5px; }
+.arch svg .m { fill: var(--a-ink2); font-size: 11px; font-family: var(--bs-font-monospace, monospace); }
+.arch svg .g { fill: var(--a-muted); font-size: 11.5px; font-weight: 500; letter-spacing: 0.03em; }
+.arch svg .lbl { fill: var(--a-ink2); font-size: 11px; }
+.arch svg .arr { stroke: currentColor; stroke-width: 1.4; fill: none; }
+.arch svg .arr.pol { stroke-dasharray: 5 4; }
+.arch svg .div { stroke: var(--a-line); stroke-width: 1; }
+
+/* identity x record_state matrix */
+.arch .tw { overflow-x: auto; border: 1px solid var(--a-line); border-radius: 10px; background: var(--a-surface); margin-bottom: 1rem; }
+.arch table.matrix { border-collapse: collapse; width: 100%; font-size: 14px; margin: 0; }
+.arch table.matrix th, .arch table.matrix td {
+  text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--a-line);
+}
+.arch table.matrix tr:last-child td { border-bottom: 0; }
+.arch table.matrix th {
+  font-size: 12px; font-weight: 600; color: var(--a-muted); letter-spacing: 0.04em;
+  text-transform: uppercase; background: var(--a-wash);
+}
+.arch table.matrix td { color: var(--a-ink); }
+.arch table.matrix th:first-child, .arch table.matrix td:first-child { width: 150px; }
+.arch .cell { display: grid; gap: 4px; }
+.arch .pill { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px; }
+.arch .pill b { width: 18px; height: 18px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 12px; color: #fff; flex: none; }
+.arch .pill.ok b { background: var(--good); }
+.arch .pill.no b { background: var(--against); }
+.arch .pill.note b { background: var(--a-muted); }
+.arch .cell small { color: var(--a-ink2); font-size: 12.5px; line-height: 1.45; }

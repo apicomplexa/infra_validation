@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from infracheck.core import entities, objects
@@ -95,10 +96,51 @@ def to_objects(df: pd.DataFrame, delivery: str, yandex_region: str,
                category: str = "") -> tuple[pd.DataFrame, pd.DataFrame]:
     """(ObjectTable, RowMap) from the rows `read_rows` produced.
 
-    One row per object, flags OR-ed over the rows that repeat it; the
+    Catering has one row per object, flags OR-ed over the rows that repeat it; the
     contractor's flags disagree inside an object in a handful of cases and any
-    row's flag counts for the object.
+    row's flag counts for the object. Alcohol and tobacco preserve source rows
+    so their trade and evidence types remain distinct, as in the v4 CSVs.
     """
+    risk_layer = category in {"alcohol", "tobacco"}
+    if risk_layer:
+        # A risk workbook is a tagged layer, like the v4 CSVs: one source row
+        # is one licence-join record. Grouping by site would merge distinct
+        # trade/evidence types (for example a shop and its on-trade bar).
+        from infracheck.inputs.v4_csv import (
+            A_BAR,
+            A_CATERING,
+            A_SHOP,
+            A_SPECIALISED,
+            INFERRED_TYPES,
+            ON_TRADE_TYPES,
+            RISK_ALCOHOL,
+            RISK_TOBACCO,
+            T_HOOKAH,
+            T_POSSIBLE,
+            T_SPECIALISED,
+            T_VAPE,
+            TYPE_EN,
+        )
+
+        types = df["type"].fillna("").astype(str)
+        unknown = sorted(set(types) - set(TYPE_EN))
+        if unknown:
+            raise ValueError(f"{delivery}: unknown {category} type(s): {unknown}")
+        expected_risk = RISK_ALCOHOL if category == "alcohol" else RISK_TOBACCO
+        # These vocabularies are disjoint by risk; reject a mislabeled workbook.
+        if category == "alcohol":
+            category_types = {A_SHOP, A_CATERING, A_SPECIALISED, A_BAR}
+        else:
+            category_types = {T_POSSIBLE, T_SPECIALISED, T_VAPE, T_HOOKAH}
+        wrong = sorted(set(types) - category_types)
+        if wrong:
+            raise ValueError(f"{delivery}: {category} workbook contains other risk type(s): {wrong}")
+        df = df.copy()
+        df["risk"] = expected_risk
+        df["trade"] = np.where(types.isin(ON_TRADE_TYPES) | types.eq(T_HOOKAH), "on-trade", "off-trade")
+        df["evidence"] = np.where(types.isin(INFERRED_TYPES), "Inferred", "Direct")
+        df["brand_learn"] = category == "alcohol"
+        df["entity"] = np.arange(len(df), dtype="int64")
     arkh = (pd.to_numeric(df["Arkh_admin"], errors="coerce") if "Arkh_admin" in df
             else pd.Series(float("nan"), index=df.index)).fillna(0).eq(1)
     df = df.assign(_arkh=arkh)
@@ -118,9 +160,20 @@ def to_objects(df: pd.DataFrame, delivery: str, yandex_region: str,
         "yandex_region": yandex_region,
         "yandex_contractor_rows": _contractor_rows(g),
     })
-    ob["generic"] = [is_generic(n) for n in ob["name"]]
+    if risk_layer:
+        from infracheck.core.names import is_generic_directory
+
+        ob["generic"] = [is_generic_directory(n) for n in ob["name"]]
+        ob["risk"] = expected_risk
+        ob["trade"] = df.groupby("entity", sort=True)["trade"].first()
+        ob["evidence"] = df.groupby("entity", sort=True)["evidence"].first()
+        ob["brand_learn"] = df.groupby("entity", sort=True)["brand_learn"].first()
+    else:
+        ob["generic"] = [is_generic(n) for n in ob["name"]]
     ob.index = pd.Index([entities.object_id(delivery, e) for e in ob["entity"]], name="object_id")
     cols = list(objects.COLUMNS) + ADAPTER_COLUMNS
+    if risk_layer:
+        cols += ["risk", "trade", "evidence", "brand_learn"]
     ob = ob[cols].astype({c: t for c, t in objects.COLUMNS.items() if c != "category"} | {"category": "string"})
     rowmap = pd.DataFrame({"object_id": [entities.object_id(delivery, e) for e in df["entity"]],
                            "entity": df["entity"].to_numpy()},
@@ -134,10 +187,14 @@ def load(path: Path | str, delivery: str, yandex_region: str,
     """Read a final-delivery workbook -> (ObjectTable, RowMap, raw `data` rows).
 
     `yandex_region` is the path segment of Yandex Maps for the object's city
-    (``20/arkhangelsk``); `category` the export's own class of the file, kept
-    as information.  The raw frame is `data` plus `_ids`, `_name`, `_addr`,
+    (``20/arkhangelsk``); `category` selects catering's grouped objects or
+    per-row risk records. The raw frame is `data` plus `_ids`, `_name`, `_addr`,
     `entity`, `site_key`, row-aligned with the RowMap.
     """
     raw = read_rows(Path(path))
     ob, rowmap = to_objects(raw, delivery, yandex_region, category)
+    if category in {"alcohol", "tobacco"}:
+        # Risk-layer records are one-per-row; keep the raw frame's entity in
+        # sync with the ObjectTable/RowMap for fields later broadcast to XLSX.
+        raw["entity"] = rowmap["entity"].to_numpy()
     return ob, rowmap, raw

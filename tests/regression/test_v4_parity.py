@@ -21,6 +21,7 @@ against the licence statuses rather than pinned.
 from __future__ import annotations
 
 import io
+import re
 from pathlib import Path
 
 import openpyxl
@@ -121,9 +122,18 @@ def test_alcohol_licence_counts_only_with_the_name(built):
     weak = own & ~t["licence_name_agrees"]
     assert (e.loc[t.index[weak], "identity"] == "weak").all()
     assert t.loc[weak, "reasons"].str.contains(" || против/не найдено: ", regex=False).all()
-    # Off-trade and on-trade are reported apart and add up.
+    # Summaries report merged objects and source records separately. Only
+    # record counts add up across trade types; one merged object can have both.
     s = r["summary"]
-    assert s["Подтверждено, off-trade"] + s["Подтверждено, on-trade"] == int(t["confirmed"].sum())
+    records = []
+    for trade in ("off-trade", "on-trade"):
+        counts = re.fullmatch(r"(\d+) \(записей (\d+)\)", s[f"Подтверждено, {trade}"])
+        assert counts is not None
+        selected = t["confirmed"].astype(bool) & t["trade"].eq(trade)
+        assert int(counts[1]) == t.loc[selected, "merged"].nunique()
+        assert int(counts[2]) == int(selected.sum())
+        records.append(int(counts[2]))
+    assert sum(records) == int(t["confirmed"].sum())
 
 
 @pytest.mark.golden

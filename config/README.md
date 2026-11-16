@@ -10,6 +10,14 @@ Everything a user of this workflow is expected to edit lives here.
 Execution settings (cores, memory, cluster executor) are **not** configured
 here — see `workflow/profiles/`.
 
+`finalest.yaml` is an optional overlay on `config.yaml`, used with
+`snakemake --configfile config/finalest.yaml -- all` (`pixi run finalest`).
+It selects `deliveries_finalest.tsv` and isolates results and logs. Its risk
+match groups each contain one city's tobacco delivery followed by alcohol;
+the existing registry loader filters the extract to that city. `home_cities`
+recognises all three city prefixes during address parsing. The original
+default delivery sheet is unchanged.
+
 ## `deliveries.tsv` columns
 
 | Column | Description |

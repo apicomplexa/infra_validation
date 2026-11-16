@@ -571,7 +571,7 @@ def wide(ev: pd.DataFrame, index: pd.Index | None = None) -> pd.DataFrame:
                      ("ya_address", "matched_address"), ("ya_url", "ref"),
                      ("ya_nearby", "yandex_nearby"), ("ya_search_url", "yandex_search_url"),
                      ("ya_checked", "yandex_checked")):
-        out[col] = own[src].astype(object).reindex(out.index).fillna("")
+        out[col] = "" if own.empty else own[src].astype(object).reindex(out.index).fillna("")
     dist = own["distance_m"].astype(object).reindex(out.index)
     out["ya_distance_m"] = [float(x) if pd.notna(x) else "" for x in dist]
     return out[["ya_contractor", "ya_contractor_raw", "ya_c_name", "ya_c_addr", "ya_c_url",
@@ -586,10 +586,14 @@ def fetch_missing(ob: pd.DataFrame, cache: dict, cache_path, *, limit: int = 0,
     """Read the pages missing from the cache, appending as it goes.
 
     A failure is not an answer: not cached, asked again next run.  Returns the
-    number of pages cached.
+    number of pages cached. Repeated rows sharing a query use one request.
     """
     urls = [own_query(r) for _, r in ob.iterrows()]
-    todo = [r for (_, r), url in zip(ob.iterrows(), urls, strict=True) if url not in cache]
+    missing = {}
+    for (_, r), url in zip(ob.iterrows(), urls, strict=True):
+        if url not in cache:
+            missing.setdefault(url, r)
+    todo = list(missing.values())
     if limit:
         todo = todo[:limit]
     print(f"  Yandex: {len(ob):,} objects in scope, "

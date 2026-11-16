@@ -1,0 +1,19 @@
+# Overlay on config/config.yaml; run from the repository root.
+deliveries: config/deliveries_finalest.tsv
+
+pathvars:
+  results: results/finalest
+  logs: logs/finalest
+
+# The existing risk-layer matching rules, with all delivered city prefixes
+# recognised by the address parser. Each city's two risk layers form one
+# match group; registry.run filters the register to that group's city.
+categories:
+  alcohol:
+    policy:
+      egais:
+        home_cities: [Архангельск, Новодвинск, Северодвинск]
+  tobacco:
+    policy:
+      egais:
+        home_cities: [Архангельск, Новодвинск, Северодвинск]

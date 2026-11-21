@@ -140,7 +140,7 @@ def run_batch(rows, template, model, effort, timeout=900):
 def audit(
     sample,
     limit=None,
-    batch=8,
+    batch=None,
     model=None,
     effort=None,
     dry_run=False,
@@ -148,14 +148,15 @@ def audit(
     export_only=False,
     config_path="config/calibration.yaml",
     shard=None,
+    escalate_axes="exists,category_ok",
 ):
     cfg = yaml.safe_load(Path(config_path).read_text(encoding="utf-8"))
     paths = cfg["paths"]
     models = cfg["models"]
     model = model or models["escalation" if escalate else "default"]
     effort = effort or models["escalation_effort" if escalate else "effort"]
-    if escalate:
-        batch = 3
+    if batch is None:
+        batch = 3 if escalate else 8
     if batch < 1 or (limit is not None and limit < 0):
         raise ValueError("Invalid batch size or limit")
     inputs = pd.read_csv(Path(paths["output"]) / f"auditor_input_{sample}.csv").fillna("")
@@ -175,6 +176,9 @@ def audit(
         export(sample, inputs, cache_base, Path(paths["output"]), Path(paths["cache"]) / "urls")
         return
     if escalate:
+        axes = [axis.strip() for axis in escalate_axes.split(",") if axis.strip()]
+        if not axes or any(axis not in AXES for axis in axes):
+            raise ValueError("Escalation axes must be a comma-separated list of: " + ", ".join(AXES))
         verified_path = Path(paths["output"]) / f"auditor_labels_{sample}.csv"
         if not verified_path.exists():
             raise FileNotFoundError("Verified labels are required before escalation")
@@ -188,7 +192,7 @@ def audit(
             continue
         if (unit, version, model) in cached:
             continue
-        if escalate and (unit not in latest or not any(latest[unit].get(k) == "unclear" for k in AXES)):
+        if escalate and (unit not in latest or not any(latest[unit].get(k) == "unclear" for k in axes)):
             continue
         candidates.append(row)
     if limit is not None:
@@ -254,11 +258,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--sample", required=True, choices=["A", "B"])
     parser.add_argument("--limit", type=int)
-    parser.add_argument("--batch", type=int, default=8)
+    parser.add_argument("--batch", type=int)
     parser.add_argument("--model")
     parser.add_argument("--effort")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--escalate", action="store_true")
+    parser.add_argument("--escalate-axes", default="exists,category_ok")
     parser.add_argument("--export-only", action="store_true")
     def parse_shard(value):
         try:

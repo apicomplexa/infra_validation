@@ -148,6 +148,40 @@ def test_failed_batch_never_cached(tmp_path, monkeypatch):
     assert (tmp_path / "cache" / "audit_A.jsonl").read_text() == ""
 
 
+def test_escalation_axes_and_cli_overrides(tmp_path, monkeypatch):
+    import pandas as pd
+    import yaml
+
+    from infracheck.audit.auditor import audit
+
+    output, cache = tmp_path / "out", tmp_path / "cache"
+    output.mkdir()
+    pd.DataFrame([{"unit_id": unit, "name": unit} for unit in ("x", "y")]).to_csv(
+        output / "auditor_input_A.csv", index=False
+    )
+    pd.DataFrame([
+        {"unit_id": "x", "exists": "yes", "open": "unclear", "category_ok": "yes", "is_vending": "no"},
+        {"unit_id": "y", "exists": "yes", "open": "yes", "category_ok": "yes", "is_vending": "unclear"},
+    ]).to_csv(output / "auditor_labels_A.csv", index=False)
+    prompt = tmp_path / "prompt"
+    prompt.write_text("---\nprompt_version: 1\n---\nCheck")
+    config = tmp_path / "config.yaml"
+    config.write_text(yaml.safe_dump({
+        "paths": {"output": str(output), "cache": str(cache), "prompt": str(prompt)},
+        "models": {"default": "base", "effort": "medium", "escalation": "strong", "escalation_effort": "high"},
+    }))
+    calls = []
+
+    def batch(rows, _template, model, effort):
+        calls.append((model, effort, [row["unit_id"] for row in rows]))
+        return ([], {})
+
+    monkeypatch.setattr("infracheck.audit.auditor.run_batch", batch)
+    audit("A", escalate=True, escalate_axes="open,is_vending", model="custom", effort="low", batch=1,
+          config_path=config)
+    assert calls == [("custom", "low", ["x"]), ("custom", "low", ["y"])]
+
+
 def test_shard_partition_covers_every_unit_once():
     units = [f"unit-{i}" for i in range(100)]
     partitions = [[unit for unit in units if shard_for(unit, 4) == index] for index in range(4)]

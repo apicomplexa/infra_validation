@@ -582,7 +582,7 @@ def wide(ev: pd.DataFrame, index: pd.Index | None = None) -> pd.DataFrame:
 # ------------------------------------------------------------------------- CLI
 
 def fetch_missing(ob: pd.DataFrame, cache: dict, cache_path, *, limit: int = 0,
-                  sleep: tuple[float, float] = (2.5, 4.5)) -> int:
+                  sleep: tuple[float, float] = (2.5, 4.5), failures: list | None = None) -> int:
     """Read the pages missing from the cache, appending as it goes.
 
     A failure is not an answer: not cached, asked again next run.  Returns the
@@ -608,6 +608,8 @@ def fetch_missing(ob: pd.DataFrame, cache: dict, cache_path, *, limit: int = 0,
             rec = {"candidates": [], "note": f"{type(e).__name__}: {e}"}
         rec["site_key"] = r["site_key"]
         if rec["note"]:
+            if failures is not None:
+                failures.append(rec["note"])
             print(f"    [{i:>4}/{len(todo)}] -- failed  {rec['note']}", flush=True)
             continue
         append_cache(rec, cache_path)
@@ -637,8 +639,9 @@ def main(argv=None) -> int:
         ids = [x.strip() for x in Path(args.only_ids).read_text(encoding="utf-8").splitlines() if x.strip()]
         ob = ob.loc[ob.index.intersection(ids)]
     cache = {} if args.refresh else load_cache(args.cache)
-    fetch_missing(ob, cache, args.cache, limit=args.limit, sleep=tuple(args.sleep))
-    return 0
+    failures = []
+    fetch_missing(ob, cache, args.cache, limit=args.limit, sleep=tuple(args.sleep), failures=failures)
+    return int(bool(failures))
 
 
 if __name__ == "__main__":

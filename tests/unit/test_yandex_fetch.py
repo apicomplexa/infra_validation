@@ -57,6 +57,30 @@ def test_failed_query_is_attempted_once_and_can_retry(objects, monkeypatch, tmp_
     assert calls == ["Первый", "Второй", "Первый"]
 
 
+def test_cli_reports_failure_after_finishing_queue(objects, monkeypatch, tmp_path):
+    calls = []
+
+    def read(name, address, lat, lon, **kwargs):
+        calls.append(name)
+        if name == "Первый":
+            return {"candidates": [], "note": "temporary failure"}
+        return {"search_url": yandex.search_url(name, address, lat, lon, kwargs["city"]),
+                "candidates": [], "note": ""}
+
+    monkeypatch.setattr(yandex, "read", read)
+    monkeypatch.setattr(pd, "read_parquet", lambda _: objects)
+    cache_path = tmp_path / "cache.jsonl"
+    assert yandex.main(["fetch", "--objects", "unused", "--cache", str(cache_path)]) == 1
+    assert calls == ["Первый", "Второй"]
+    assert len(yandex.load_cache(cache_path)) == 1
+    monkeypatch.setattr(yandex, "read", lambda name, address, lat, lon, **kwargs: {
+        "search_url": yandex.search_url(name, address, lat, lon, kwargs["city"]),
+        "candidates": [], "note": "",
+    })
+    assert yandex.main(["fetch", "--objects", "unused", "--cache", str(cache_path)]) == 0
+    assert len(yandex.load_cache(cache_path)) == 2
+
+
 @pytest.mark.parametrize("contractor_name", [None, "Первый", "Чужая организация"])
 def test_wide_handles_no_cached_answers(objects, contractor_name):
     ob = objects.iloc[:1].copy()

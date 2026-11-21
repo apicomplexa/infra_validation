@@ -130,7 +130,8 @@ def test_alcohol_licence_counts_only_with_the_name(built):
         counts = re.fullmatch(r"(\d+) \(записей (\d+)\)", s[f"Подтверждено, {trade}"])
         assert counts is not None
         selected = t["confirmed"].astype(bool) & t["trade"].eq(trade)
-        assert int(counts[1]) == t.loc[selected, "merged"].nunique()
+        pooled = t["confirmed_object"].astype(bool) & t["trade"].eq(trade)
+        assert int(counts[1]) == t.loc[pooled, "merged"].nunique()
         assert int(counts[2]) == int(selected.sum())
         records.append(int(counts[2]))
     assert sum(records) == int(t["confirmed"].sum())
@@ -162,3 +163,20 @@ def test_v4_deliverables(built):
         kind = [row[2] for row in ws.iter_rows(min_row=2, max_col=3, values_only=True)]
         assert all(kind) and set(kind) <= set(r["spec"].kind.words.values()), k
         assert "Подтверждение" in openpyxl.load_workbook(r["xlsx"]).sheetnames
+
+
+@pytest.mark.golden
+def test_pooled_verdicts_and_kind_transitions(built):
+    for r in built["res"].values():
+        t, spec = r["table"], r["spec"]
+        groups = t[[g.column for g in spec.groups]].groupby(t["merged"]).any()
+        expected = groups.sum(axis=1).ge(spec.min_sources).astype(int)
+        assert t["confirmed_object"].tolist() == t["merged"].map(expected).tolist()
+        assert spec.kind.vote_identity == ("strong",)
+        # Both v4 categories already used strong-only voting before this change.
+        from infracheck.categories import base
+
+        old = base.kind(registry.stack(r["evs"]), t.index, spec)[spec.kind.column]
+        transitions = pd.crosstab(old, t[spec.kind.column])
+        assert int(transitions.to_numpy().sum() - sum(transitions.loc[x, x] for x in transitions.index
+                                                       if x in transitions.columns)) == 0

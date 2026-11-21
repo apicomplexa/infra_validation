@@ -5,6 +5,7 @@ shape; the parity test covers the numbers.
 """
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pandas as pd
@@ -124,7 +125,8 @@ def test_merged_components_and_summary(spec):
            {"object_id": "b", "check": "relink", "source": "2gis", "relink_object": "a"})
     m = base.merged(e, objects, spec)
     assert m.to_dict() == {"a": 1, "b": 1, "c": 1, "d": 0}
-    table = pd.DataFrame({"merged": m, "confirmed": [1, 1, 1, 0], "sources": ["OSM", "OSM", "OSM", ""]}
+    table = pd.DataFrame({"merged": m, "confirmed_object": [1, 1, 1, 0], "confirmed": [1, 1, 1, 0],
+                          "sources": ["OSM", "OSM", "OSM", ""]}
                          | {g.column: False for g in spec.groups}, index=idx)
     table["src_osm"] = [True, True, True, False]
     assert base.disagreeing(table, spec) == 0
@@ -135,4 +137,26 @@ def test_merged_components_and_summary(spec):
     table.loc["c", "confirmed"] = 0
     assert base.disagreeing(table, spec) == 1
     assert base._value({"value": "confirmed_objects"}, table, table, spec).endswith(
-        "; у 1 склеенных объектов записи расходятся")
+        "; у 1 склеенных объектов решение объекта отличается от решения хотя бы одной записи")
+
+
+def test_pooled_evidence_and_empty_links(spec):
+    spec = replace(spec, derived={}, how_column="", query_column="")
+    idx = pd.Index(["a", "b", "c", "d"], name="object_id")
+    objects = pd.DataFrame({"entity": [0, 1, 2, 3]}, index=idx)
+    e = ev({"object_id": "a", "check": "relink", "source": "osm", "relink_object": "b"},
+           {"object_id": "b", "check": "providers", "source": "2gis"},
+           {"object_id": "c", "check": "relink", "source": "osm", "relink_object": "d"},
+           {"object_id": "d", "check": "providers", "source": "osm"},
+           {"object_id": "d", "check": "yandex", "source": "yandex", "identity": "weak"})
+    out = base.decide(objects, e, pd.DataFrame(index=idx), spec)
+    assert out["confirmed"].tolist() == [0, 0, 0, 0]
+    assert out["confirmed_object"].tolist() == [1, 1, 0, 0]
+    assert base.disagreeing(out, spec) == 1
+    assert base.combinations(out, spec).to_dict() == {"OSM; 2GIS": 1, "OSM": 1}
+    assert base._value({"value": "confirmed_objects"}, out, out, spec).startswith("1 из 2 (50.0%); записей 0 из 4")
+    no_links = ev({"object_id": "a", "check": "egais", "source": "egais"})
+    shared = replace(spec, merge=replace(spec.merge, shared=(("egais", "egais_entity"),)))
+    assert base.merged(no_links, objects, shared).tolist() == [0, 1, 2, 3]
+    empty = base.decide(objects.iloc[:0], evidence.make([]), pd.DataFrame(index=idx[:0]), shared)
+    assert base._value({"value": "confirmed_objects"}, empty, empty, shared).startswith("0 из 0 (0.0%)")

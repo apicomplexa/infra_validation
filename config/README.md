@@ -69,17 +69,7 @@ category-specific code; `catering.py` only names its block.
 | `deliver.legend` | `deliver` | `str.format` templates over the Policies used — `{providers.relink_m:.0f}`, `{foursquare.fresh:.4}` — plus `{min_sources}` and `{min_sources_genitive}`. No threshold is written out by hand. |
 | `summary`, `combinations_title` | `decide`, `deliver` | «Итоги» lines: a fixed `value` (`rows`, `objects`, `confirmed_objects`, `confirmed_rows`), a `count` (boolean expression over the decided table; `min_sources` is in scope), or `counts` (several, " / "-joined). `for: [...]` repeats a line, `{}` replaced by each item. |
 
-## Deviations from the three-axes default (kept for parity)
-
-Where the config reproduces the archive against the default rule
-(`docs/ARCHITECTURE.md`, «Три оси»), it says so in a `PARITY` comment:
-
-- `kind.vote_identity: [strong, weak]` — FSQ / Overture records another object
-  won (`exclusive` → weak) still vote on the kind, as in the archive.
-
-Fixed on 2026-10-30 (`docs/changes/2026-10-30-overture-fsq-and-food-column.md`):
-the Foursquare-only Overture place no longer counts (`existence.exclude`), and
-«Общепит?» is written into the delivered sheet.
+Слабые находки не голосуют за вид объекта: `kind.vote_identity: [strong]` во всех категориях.
 
 ## Categories on the fourth delivery
 

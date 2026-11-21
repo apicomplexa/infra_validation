@@ -25,7 +25,7 @@ Three questions, kept apart on purpose (docs/ARCHITECTURE.md, «Три оси»)
   themselves tie together -- the twin a provider was lent from (`relink`),
   the shop the v4 licence join makes of several records -- are merged into
   connected components (`merged`); every per-record column stays as it is,
-  and the summary counts merged objects with the records beside them.
+  and the summary counts merged objects with pooled evidence and records beside them.
 * **Reasons.**  Counted clauses first, one per group, "LABEL: a; b"; then,
   after « || против/не найдено: », every row that was *not* counted and has
   something to say -- what was looked for, and what stood there instead.  The
@@ -142,7 +142,7 @@ class Merge:
     column: str = ""
     pairs: tuple[tuple[str, str], ...] = ()
     shared: tuple[tuple[str, str], ...] = ()
-    disagree: str = ""   # appended to «Подтверждено объектов» when records of one object differ
+    disagree: str = ""   # appended when a record differs from its pooled object verdict
 
 
 @dataclass(frozen=True)
@@ -291,11 +291,9 @@ def needs_query(ev: pd.DataFrame, index: pd.Index, spec: Spec) -> pd.Series:
 # --------------------------------------------------------------------- merging
 
 def _link_rows(ev: pd.DataFrame, check: str, fld: str) -> pd.DataFrame:
-    """The rows of `check`; an error if it wrote some without `fld` (stale Evidence)."""
+    """Rows with links, or an empty frame when the optional field is absent."""
     e = ev[ev["check"].eq(check)]
-    if len(e) and fld not in e.columns:
-        raise ValueError(f"merge: {check} rows carry no {fld!r} -- Evidence older than the merge rule")
-    return e
+    return e.dropna(subset=[fld]) if fld in e.columns else e.assign(**{fld: pd.Series(dtype=object)})
 
 
 def merged(ev: pd.DataFrame, objects: pd.DataFrame, spec: Spec) -> pd.Series:
@@ -505,6 +503,12 @@ def decide(objects: pd.DataFrame, ev: pd.DataFrame, wide: pd.DataFrame, spec: Sp
         out[spec.query_column] = needs_query(ev, index, spec)
     if spec.merge.column:
         out[spec.merge.column] = merged(ev, objects, spec)
+        pooled = ev.copy()
+        pooled["object_id"] = pooled["object_id"].map(out[spec.merge.column])
+        pooled = pooled[pooled["object_id"].notna()]
+        groups = pd.Index(out[spec.merge.column].unique())
+        verdict = existence(pooled, groups, spec)["confirmed"]
+        out["confirmed_object"] = out[spec.merge.column].map(verdict).astype("int64")
     return out
 
 
@@ -516,9 +520,9 @@ def _merged_of(table: pd.DataFrame, spec: Spec) -> pd.Series | None:
 
 
 def disagreeing(table: pd.DataFrame, spec: Spec, column: str = "confirmed") -> int:
-    """Merged objects whose records differ in `column` (0 when nothing is merged)."""
+    """Merged objects with a record differing from the pooled verdict."""
     m = _merged_of(table, spec)
-    return 0 if m is None else int((table[column].groupby(m.to_numpy()).nunique() > 1).sum())
+    return 0 if m is None else int(m[table[column].ne(table["confirmed_object"])].nunique())
 
 
 def _count(mask, table: pd.DataFrame, spec: Spec) -> tuple[int, int]:
@@ -532,7 +536,7 @@ def _count(mask, table: pd.DataFrame, spec: Spec) -> tuple[int, int]:
 def _value(line: Mapping, table: pd.DataFrame, rows: pd.DataFrame, spec: Spec):
     """One summary value.  With merging on, objects are merged objects and the
     record count follows in brackets ("670 (записей 749)"); a merged object
-    counts on a line when any of its records does."""
+    counts on a line when any of its records matches, using the pooled verdict for confirmed."""
     m, w = _merged_of(table, spec), spec.records_word
     v = line.get("value")
     if v == "rows":
@@ -542,23 +546,29 @@ def _value(line: Mapping, table: pd.DataFrame, rows: pd.DataFrame, spec: Spec):
     if v == "confirmed_objects":
         c, n = int(table["confirmed"].sum()), len(table)
         if m is None:
-            return f"{c} из {n} ({table['confirmed'].mean():.1%})"
-        cm, nm = _count(table["confirmed"], table, spec)[0], m.nunique()
-        out = f"{cm} из {nm} ({cm / nm:.1%}); {w} {c} из {n}"
+            return f"{c} из {n} ({c / n if n else 0:.1%})"
+        cm, nm = _count(table["confirmed_object"], table, spec)[0], m.nunique()
+        out = f"{cm} из {nm} ({cm / nm if nm else 0:.1%}); {w} {c} из {n}"
         k = disagreeing(table, spec)
         return out + (spec.merge.disagree.format(n=k) if k else "")
     if v == "confirmed_rows":
         return f"{rows['confirmed'].sum()} из {len(rows)}"
     if "count" in line:
-        cm, c = _count(_expr(table, line["count"], spec), table, spec)
+        cm, c = _summary_count(line["count"], table, spec)
         return c if m is None else f"{cm} ({w} {c})"
     if "counts" in line:
         sep = line.get("sep", " / ")
-        pairs = [_count(_expr(table, e, spec), table, spec) for e in line["counts"]]
+        pairs = [_summary_count(e, table, spec) for e in line["counts"]]
         if m is None:
             return sep.join(str(c) for _, c in pairs)
         return sep.join(str(cm) for cm, _ in pairs) + f" ({w} " + sep.join(str(c) for _, c in pairs) + ")"
     raise ValueError(f"summary line without a value: {line}")
+
+
+def _summary_count(expr: str, table: pd.DataFrame, spec: Spec) -> tuple[int, int]:
+    records = _count(_expr(table, expr, spec), table, spec)[1]
+    pooled = table.assign(confirmed=table["confirmed_object"]) if "confirmed_object" in table else table
+    return _count(_expr(pooled, expr, spec), table, spec)[0], records
 
 
 def summarise(table: pd.DataFrame, rows: pd.DataFrame, spec: Spec) -> list[tuple[str, object]]:

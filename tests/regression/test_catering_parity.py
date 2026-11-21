@@ -24,7 +24,7 @@ asserted here object by object rather than tolerated:
   the archive left the column empty.
 
 And for the two changes of 2026-10-30
-(docs/changes/2026-10-30-merged-objects-and-kind-votes.md):
+(docs/changes/2026-11-21-merged-objects.md):
 
 * a record another object won (`identity = weak`) no longer votes on
   «Общепит?»: `food_reasons` loses exactly those clauses, on exactly the
@@ -218,14 +218,14 @@ def test_weak_records_no_longer_vote_on_kind(built, mine, gold):
 
 @pytest.mark.golden
 def test_merged_objects(built):
-    """`merged` is the relink components; records of one merged object never disagree on «Подтверждено»."""
+    """`merged` follows relink components; pooled and record verdicts coincide on these fixtures."""
     table, _, evs = built
     for f, part in table.groupby("file"):
         city = next(c for c in MERGED if c in f)
         n, conf = MERGED[city]
         assert part["merged"].nunique() == n, f
         assert part.loc[part["confirmed"].astype(bool), "merged"].nunique() == conf, f
-        assert (part.groupby("merged")["confirmed"].nunique() == 1).all(), f
+        assert (part["confirmed_object"] == part["confirmed"]).all(), f
         # The merged id is the lowest «Объект №» of the component.
         assert (part.groupby("merged")["entity"].min() == part.groupby("merged")["entity"].min().index).all(), f
     # Every relink link joins two records of one merged object, and no other records are joined.
@@ -282,12 +282,12 @@ def test_xlsx_parity(built, golden, gold):
         gw, mw = openpyxl.load_workbook(gold_p), openpyxl.load_workbook(mine_p)
         assert gw.sheetnames == mw.sheetnames, mine_p.name
         gs, ms = gw["data"], mw["data"]
-        assert (gs.max_row, gs.max_column + 1) == (ms.max_row, ms.max_column), mine_p.name
-        last = get_column_letter(gs.max_column + 1)
+        assert (gs.max_row, gs.max_column + 2) == (ms.max_row, ms.max_column), mine_p.name
+        last = get_column_letter(gs.max_column + 2)
         assert ms.auto_filter.ref == f"A1:{last}{gs.max_row}" and gs.freeze_panes == ms.freeze_panes
         g_rows, m_rows = list(gs.iter_rows(values_only=True)), list(ms.iter_rows(values_only=True))
         header = list(g_rows[0])
-        assert list(m_rows[0]) == [*header, MERGED_CELL], mine_p.name
+        assert list(m_rows[0]) == [*header, MERGED_CELL, "Подтверждено (объект)"], mine_p.name
         col = {h: header.index(h) for h in [FOOD_CELL, "Объект №", *FIX_OVERTURE_CELLS, *FIX_KIND_CELLS]}
         file = mine_p.name.replace("_подтверждено.xlsx", ".xlsx")
         objs = table[table["file"] == file].reset_index(drop=True)
@@ -299,14 +299,15 @@ def test_xlsx_parity(built, golden, gold):
             entity = gr[col["Объект №"]]
             assert gr[col[FOOD_CELL]] is None, "the archive's food column is empty"
             assert mr[col[FOOD_CELL]] == objs.at[entity, "food"] and mr[col[FOOD_CELL]], (mine_p.name, i)
-            assert mr[-1] == objs.at[entity, "merged"], (mine_p.name, i)
+            assert mr[-2] == objs.at[entity, "merged"]
+            assert mr[-1] == objs.at[entity, "confirmed_object"], (mine_p.name, i)
             food_rows += 1
             if entity in fixed:   # fix 1's cells carry the decided values of the object
                 assert [mr[col[h]] for h in FIX_OVERTURE_CELLS] == [
                     int(objs.at[entity, "n_sources"]), objs.at[entity, "sources"], objs.at[entity, "reasons"]]
             if entity in kind_moved:
                 assert mr[col["Общепит: основания"]] == (objs.at[entity, "food_reasons"] or None)
-            for j, (a, b) in enumerate(zip(gr, mr[:-1], strict=True)):
+            for j, (a, b) in enumerate(zip(gr, mr[:-2], strict=True)):
                 if (j == col[FOOD_CELL] or (entity in fixed and header[j] in FIX_OVERTURE_CELLS)
                         or (entity in kind_moved and header[j] == "Общепит: основания")):
                     continue

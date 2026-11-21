@@ -108,3 +108,31 @@ Direct/Inferred и обучение брендов определяются те
 относится к своему типу. «Подтверждено = 0» не означает, что объекта нет:
 это очередь для ручной проверки. Находка в Яндексе — не лицензия. Табачный
 слой не подтверждается реестром: в реестре нет табака.
+
+## Калибровка и независимая оценка
+
+После завершения запросов Яндекса и пересчёта finalest проверьте настройки
+`config/calibration.yaml` и выполните команды из корня проекта:
+
+```bash
+export PYTHONPATH=src:packages/licmatch/src
+pixi run calibration-sample
+pixi run calibration-audit --sample A
+pixi run calibration-audit --sample B
+pixi run calibration-audit --sample A --escalate
+pixi run calibration-audit --sample B --escalate
+pixi run calibration-evaluate
+pixi run calibration-human-check
+```
+
+Аудит обращается к Codex и сети; `--dry-run` показывает объём работы,
+`--limit N` ограничивает число объектов в запуске. Повторный запуск
+продолжает работу по кэшу `resources/cache/audit/`. После заполнения
+`results/finalest/calibration/human_check_B.xlsx` повторно запустите
+`calibration-evaluate`, чтобы учесть ответы человека. Выборки, таблицы и
+отчёт находятся в `results/finalest/calibration/`; запечатанные выборки
+содержат вердикты конвейера и не предназначены для аудитора или проверяющего.
+`manifest.json` защищает от повторной выборки: её изменение требует явно
+удалить манифест и зафиксировать причину в `docs/changes/`. Порядок работы,
+условия применения и ограничения оценки приведены в
+[протоколе калибровки](docs/calibration_protocol.md).

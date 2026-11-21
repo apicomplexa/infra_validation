@@ -89,6 +89,7 @@ def verify_label(label: dict, name: str, verifier: URLVerifier) -> dict:
         urls = [value.strip() for value in urls.split(";") if value.strip()]
     result["url_types"] = [source_type(url) for url in urls]
     verified = [verifier.verify(url, name, result.get("quote", "")) for url in urls]
+    result["verified_url_types"] = [source_type(url) for url, valid in zip(urls, verified, strict=True) if valid]
     if not any(verified):
         original = {key: result.get(key) for key in ("exists", "open", "category_ok", "is_vending")}
         result["notes"] = (

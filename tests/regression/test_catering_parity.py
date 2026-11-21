@@ -211,7 +211,7 @@ def test_weak_records_no_longer_vote_on_kind(built, mine, gold):
                 if c and not any(c.startswith(h) for h in heads)]
         assert mine.at[i, "food_reasons"] == " | ".join(kept), gold.at[i, "site_key"]
     moved = gold["food"] != mine["food"]
-    pairs = pd.Series(list(zip(gold.loc[moved, "food"], mine.loc[moved, "food"]))).value_counts().to_dict()
+    pairs = pd.Series(list(zip(gold.loc[moved, "food"], mine.loc[moved, "food"], strict=True))).value_counts().to_dict()
     assert pairs == KIND_TRANSITIONS
     assert not (moved & ~changed).any()
 

@@ -41,3 +41,4 @@ def test_every_citation_is_checked():
     result = verify_label({"exists": "yes", "urls": ["https://2gis.ru/a", "https://example.org/b"]}, "Имя", verifier)
     assert verifier.verify.call_count == 2
     assert result["exists"] == "yes"
+    assert result["verified_url_types"] == ["2gis"]

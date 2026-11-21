@@ -31,11 +31,16 @@ FIELDS = [
     "quote",
     "urls",
     "url_types",
+    "verified_url_types",
     "evidence_date",
     "audit_date",
     "auditor_model",
     "escalated",
     "notes",
+    "initial_exists",
+    "initial_open",
+    "initial_category_ok",
+    "initial_is_vending",
 ]
 PROPERTIES = {
     **{k: {"type": "string", "enum": v} for k, v in AXES.items()},
@@ -143,7 +148,7 @@ def audit(
         verified_path = Path(paths["output"]) / f"auditor_labels_{sample}.csv"
         if not verified_path.exists():
             raise FileNotFoundError("Verified labels are required before escalation")
-        verified = pd.read_csv(verified_path).fillna("")
+        verified = pd.read_csv(verified_path, dtype=str).fillna("")
         latest = {row["unit_id"]: row for row in verified.to_dict("records")}
     cached = {(x["unit_id"], str(x["prompt_version"]), x["auditor_model"]) for x in existing}
     candidates = []
@@ -190,14 +195,24 @@ def audit(
 
 def export(sample, inputs, cache, output, url_cache):
     names = inputs.set_index("unit_id")["name"].to_dict()
-    latest = {row["unit_id"]: row for row in load_cache(cache) if row["unit_id"] in names}
+    latest = {}
+    initial = {}
+    for row in load_cache(cache):
+        unit = row["unit_id"]
+        if unit in names:
+            latest[unit] = row
+            if not row.get("escalated"):
+                initial[unit] = row
     verifier = URLVerifier(url_cache)
     with (output / f"auditor_labels_{sample}.csv").open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=FIELDS, extrasaction="ignore")
         writer.writeheader()
         for unit in sorted(latest):
             label = verify_label(latest[unit], names[unit], verifier)
-            for key in ("urls", "url_types"):
+            if unit in initial:
+                first = verify_label(initial[unit], names[unit], verifier)
+                label.update({f"initial_{key}": first[key] for key in AXES})
+            for key in ("urls", "url_types", "verified_url_types"):
                 label[key] = ";".join(label.get(key) or [])
             writer.writerow(label)
 

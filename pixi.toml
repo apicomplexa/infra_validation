@@ -50,6 +50,7 @@ licmatch-test = { cmd = "python packages/licmatch/run_tests.py", description = "
 fmt = { cmd = "ruff format src packages workflow tests && ruff check --fix src packages workflow tests && snakefmt workflow", description = "Format Python and Snakemake code" }
 lint = { cmd = "ruff check src packages workflow tests && snakefmt --check workflow && snakemake --lint", depends-on = ["export-envs"], description = "Lint everything (no changes)" }
 hooks = { cmd = "pre-commit install", description = "Install git pre-commit hooks" }
+deliverable = { cmd = "python workflow/scripts/build_deliverable.py", description = "Assemble results/finalest/deliverable/ for the supervisor from the finalest outputs (copies, no recomputation)" }
 calibration-sample = { cmd = "python workflow/scripts/calibration_sample.py", description = "Create sealed calibration samples" }
 calibration-audit = { cmd = "python -m infracheck.audit.auditor", description = "Audit calibration samples" }
 calibration-grid = { cmd = "python -m infracheck.audit.grid", description = "Run the offline calibration grid on sample A" }

@@ -32,6 +32,10 @@ FIELDS = [
     "quote",
     "urls",
     "url_types",
+    "url_outcomes",
+    "n_verified",
+    "n_contradicted",
+    "n_unreachable",
     "verified_url_types",
     "evidence_date",
     "audit_date",
@@ -130,6 +134,7 @@ def audit(
     effort=None,
     dry_run=False,
     escalate=False,
+    export_only=False,
     config_path="config/calibration.yaml",
 ):
     cfg = yaml.safe_load(Path(config_path).read_text(encoding="utf-8"))
@@ -148,6 +153,9 @@ def audit(
     front = yaml.safe_load(prompt.split("---", 2)[1])
     version = str(front["prompt_version"])
     latest = {x["unit_id"]: x for x in existing}
+    if export_only:
+        export(sample, inputs, cache, Path(paths["output"]), Path(paths["cache"]) / "urls")
+        return
     if escalate:
         verified_path = Path(paths["output"]) / f"auditor_labels_{sample}.csv"
         if not verified_path.exists():
@@ -230,6 +238,7 @@ def main():
     parser.add_argument("--effort")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--escalate", action="store_true")
+    parser.add_argument("--export-only", action="store_true")
     audit(**vars(parser.parse_args()))
 
 

@@ -94,7 +94,7 @@ def test_audit_resume_retry_and_escalation(tmp_path, monkeypatch):
         )
 
     monkeypatch.setattr("infracheck.audit.auditor.run_batch", batch)
-    monkeypatch.setattr("infracheck.audit.verify.URLVerifier.verify", lambda *args: True)
+    monkeypatch.setattr("infracheck.audit.verify.URLVerifier.verify", lambda *args: "verified")
     audit("B", batch=2, config_path=config)
     audit("B", config_path=config)
     assert len(calls) == 2
@@ -106,6 +106,11 @@ def test_audit_resume_retry_and_escalation(tmp_path, monkeypatch):
     assert set(exported.exists) == {"yes"}
     assert set(exported.initial_exists) == {"unclear"}
     assert set(exported.url_types) == {"2gis"}
+    monkeypatch.setattr(
+        "infracheck.audit.auditor.run_batch",
+        lambda *args: (_ for _ in ()).throw(AssertionError("model call in export-only mode")),
+    )
+    audit("B", export_only=True, config_path=config)
     lines = [json.loads(line) for line in (cache / "audit_B.jsonl").read_text().splitlines()]
     assert len(lines) == 4 and all(line["token_usage"]["input_tokens"] == 2 for line in lines)
 

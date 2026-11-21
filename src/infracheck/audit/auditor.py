@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import subprocess
 import tempfile
 import uuid
@@ -73,7 +74,9 @@ def load_cache(path):
 
 
 def run_batch(rows, template, model, effort, timeout=900):
-    prompt = template + "\n\nОбъекты:\n" + json.dumps(rows, ensure_ascii=False)
+    # The front matter carries prompt_version for the cache key, not for the model.
+    body = re.sub(r"\A---\n.*?\n---\n", "", template, count=1, flags=re.S)
+    prompt = body.strip() + "\n\nОбъекты:\n" + json.dumps(rows, ensure_ascii=False)
     with tempfile.TemporaryDirectory() as temp:
         tmp = Path(temp)
         schema = tmp / "schema.json"
@@ -96,9 +99,10 @@ def run_batch(rows, template, model, effort, timeout=900):
             str(schema),
             "-o",
             str(output),
-            prompt,
+            "-",  # prompt on stdin: as an argument it could be parsed as an option
         ]
-        result = subprocess.run(command, cwd=tmp, capture_output=True, text=True, timeout=timeout, check=True)
+        result = subprocess.run(command, cwd=tmp, input=prompt, capture_output=True, text=True, timeout=timeout,
+                                check=True)
         usage = None
         for line in result.stdout.splitlines():
             event = json.loads(line)

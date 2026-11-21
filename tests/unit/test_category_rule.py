@@ -155,8 +155,37 @@ def test_pooled_evidence_and_empty_links(spec):
     assert base.disagreeing(out, spec) == 1
     assert base.combinations(out, spec).to_dict() == {"OSM; 2GIS": 1, "OSM": 1}
     assert base._value({"value": "confirmed_objects"}, out, out, spec).startswith("1 из 2 (50.0%); записей 0 из 4")
-    no_links = ev({"object_id": "a", "check": "egais", "source": "egais"})
     shared = replace(spec, merge=replace(spec.merge, shared=(("egais", "egais_entity"),)))
-    assert base.merged(no_links, objects, shared).tolist() == [0, 1, 2, 3]
+    assert base.merged(evidence.make([]), objects, shared).tolist() == [0, 1, 2, 3]
+    with pytest.raises(ValueError, match="egais_entity"):
+        base.merged(ev({"object_id": "a", "check": "egais", "source": "egais"}), objects, shared)
     empty = base.decide(objects.iloc[:0], evidence.make([]), pd.DataFrame(index=idx[:0]), shared)
     assert base._value({"value": "confirmed_objects"}, empty, empty, shared).startswith("0 из 0 (0.0%)")
+
+
+@pytest.mark.parametrize("identity,state,expected", [("strong", "current", [0, 0]),
+                                                      ("weak", "current", [0, 1]),
+                                                      ("strong", "stale", [0, 1])])
+def test_shared_card_requires_counted_findings(spec, identity, state, expected):
+    objects = pd.DataFrame({"entity": [0, 1]}, index=IDX)
+    e = ev({"object_id": "a", "check": "foursquare", "source": "fsq", "ref": "card"},
+           {"object_id": "b", "check": "foursquare", "source": "fsq", "ref": "card",
+            "identity": identity, "record_state": state})
+    assert base.merged(e, objects, spec).tolist() == expected
+
+
+def test_summary_pools_sources_and_query_answer(spec):
+    idx = pd.Index(["a", "b", "c", "d"], name="object_id")
+    table = pd.DataFrame({"merged": [0, 0, 1, 1], "confirmed": [0, 0, 0, 0],
+                          "confirmed_object": [1, 1, 0, 0], "ya_status": ["present", "", "", ""],
+                          "needs_yandex": [False, True, True, True]}, index=idx)
+    for g in spec.groups:
+        table[g.column] = False
+    table["src_osm"] = [True, False, True, False]
+    table["src_yandex"] = [False, True, False, False]
+    table["src_fsq"] = [False, True, False, False]
+    table["n_sources"] = [1, 2, 1, 0]
+    assert base._summary_count("confirmed.astype(bool) & src_osm & src_yandex", table, spec) == (1, 0)
+    added = "confirmed.astype(bool) & src_yandex & ((n_sources - src_yandex.astype(int)) < min_sources)"
+    assert base._summary_count(added, table, spec) == (0, 0)
+    assert base._summary_count("needs_yandex & (ya_status == '')", table, spec) == (1, 3)

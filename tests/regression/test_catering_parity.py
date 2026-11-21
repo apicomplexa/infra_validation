@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import io
 import re
+from dataclasses import replace
 from pathlib import Path
 
 import openpyxl
@@ -51,7 +52,7 @@ import pytest
 import yaml
 from openpyxl.utils import get_column_letter
 
-from infracheck.categories import catering, pipeline, registry
+from infracheck.categories import base, catering, pipeline, registry
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -95,7 +96,9 @@ KIND_CHANGED_REASONS = 11      # objects whose «Общепит: основан�
 KIND_TRANSITIONS = {("да", "нет данных"): 1}
 WEAK_KIND_SCHEMES = ("fsq_category", "overture_category")
 # 2026-10-30, merged objects: (merged objects, confirmed merged) per file; the records are the archive's.
-MERGED = {"архангельск": (1066, 728), "северодвинск": (431, 337), "новодвинск": (75, 45)}
+MERGED_BEFORE = {"архангельск": (1066, 728), "северодвинск": (431, 337), "новодвинск": (75, 45)}
+MERGED = {"архангельск": (1043, 705), "северодвинск": (419, 325), "новодвинск": (75, 45)}
+SHARED_REDUCTIONS = {"архангельск": (14, 10, 5), "северодвинск": (9, 3, 4), "новодвинск": (0, 0, 0)}
 MERGED_CELL = "Объект (склеен)"
 
 
@@ -218,23 +221,33 @@ def test_weak_records_no_longer_vote_on_kind(built, mine, gold):
 
 @pytest.mark.golden
 def test_merged_objects(built):
-    """`merged` follows relink components; pooled and record verdicts coincide on these fixtures."""
+    """Pin the old and new totals and each source's independently attributable links."""
     table, _, evs = built
+    config = yaml.safe_load((ROOT / "config" / "config.yaml").read_text(encoding="utf-8"))
+    spec = catering.spec(config)
     for f, part in table.groupby("file"):
         city = next(c for c in MERGED if c in f)
         n, conf = MERGED[city]
         assert part["merged"].nunique() == n, f
-        assert part.loc[part["confirmed"].astype(bool), "merged"].nunique() == conf, f
-        assert (part["confirmed_object"] == part["confirmed"]).all(), f
+        assert part.loc[part["confirmed_object"].astype(bool), "merged"].nunique() == conf, f
+        objects = part.set_index("object_id")
+        e = evs[evs["object_id"].isin(objects.index)]
+        old = replace(spec, merge=replace(spec.merge, shared_counted=()))
+        old_m = base.merged(e, objects, old)
+        pooled = e.assign(object_id=e["object_id"].map(old_m))
+        old_confirmed = base.existence(pooled, pd.Index(old_m.unique()), old)["confirmed"].sum()
+        assert (old_m.nunique(), old_confirmed) == MERGED_BEFORE[city]
+        reductions = []
+        for link in spec.merge.shared_counted:
+            one = replace(spec, merge=replace(spec.merge, shared_counted=(link,)))
+            reductions.append(old_m.nunique() - base.merged(e, objects, one).nunique())
+        assert tuple(reductions) == SHARED_REDUCTIONS[city]
         # The merged id is the lowest «Объект №» of the component.
         assert (part.groupby("merged")["entity"].min() == part.groupby("merged")["entity"].min().index).all(), f
-    # Every relink link joins two records of one merged object, and no other records are joined.
+    # Every relink link still joins records of one merged object.
     rl = evs[evs["check"].eq("relink")]
     m = table.set_index("object_id")["merged"]
     assert (m[rl["object_id"]].to_numpy() == m[rl["relink_object"]].to_numpy()).all()
-    pairs = {tuple(sorted(p)) for p in zip(rl["object_id"], rl["relink_object"], strict=True)}
-    sizes = table.groupby(["file", "merged"]).size()
-    assert set(sizes) == {1, 2} and int((sizes == 2).sum()) == len(pairs) == 116
 
 
 def _legend(ws) -> tuple[list[tuple], list[tuple]]:
@@ -243,7 +256,7 @@ def _legend(ws) -> tuple[list[tuple], list[tuple]]:
     return rows[:cut], rows[cut:]
 
 
-def _merged_line(label: str, gold_v, mine_v, n_merged: int, n_conf: int, food: pd.Series) -> None:
+def _merged_line(label: str, gold_v, mine_v, n_merged: int, n_conf: int, objs: pd.DataFrame) -> None:
     """One «Итоги» line: the archive's record count in brackets, the merged count before it."""
     rec = f"{FOOD_CELL} — "
     if label in ("Строк", "Подтверждено строк"):
@@ -258,11 +271,12 @@ def _merged_line(label: str, gold_v, mine_v, n_merged: int, n_conf: int, food: p
         assert m, (label, mine_v)
         if label.startswith(rec):   # the kind vote moved these record counts
             word = label[len(rec):].removesuffix(" (объектов)")
-            assert m.group(2) == str(int((food == word).sum())), label
+            assert m.group(2) == str(int((objs["food"] == word).sum())), label
+        elif label == "— добавлено Яндексом":
+            mask = objs["confirmed"].astype(bool) & objs["src_yandex"] & (objs["n_sources"] == 2)
+            assert m.group(2) == str(int(mask.sum())), label
         else:
             assert m.group(2) == str(gold_v), label
-        assert all(int(x) <= int(y) for x, y in zip(m.group(1).split(" / "), m.group(2).split(" / "),
-                                                    strict=True)), label
 
 
 @pytest.mark.golden
@@ -320,7 +334,7 @@ def test_xlsx_parity(built, golden, gold):
         assert [k for k, _ in g_sum] == [k for k, _ in m_sum], mine_p.name
         city = next(c for c in MERGED if c in file)
         for (label, gv), (_, mv) in zip(g_sum[1:], m_sum[1:], strict=True):
-            _merged_line(label, gv, mv, *MERGED[city], objs["food"])
+            _merged_line(label, gv, mv, *MERGED[city], objs)
 
         def moved(v):
             if not isinstance(v, str):

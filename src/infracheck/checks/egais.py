@@ -47,6 +47,7 @@ things about the registry govern the reading:
 """
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
@@ -246,6 +247,8 @@ def run_catering(objects: pd.DataFrame, register: pd.DataFrame,
                 "matched_address": reg["outlet_address"],
                 "distance_m": _num(r["distance"], 1), "name_score": _pct(r["name"]),
                 "ref": reg["licence_no"],
+                "egais_outlet_key": json.dumps([str(reg["licence_no"]), str(reg["outlet_address"])],
+                                               ensure_ascii=False),
                 "egais_licence_no": reg["licence_no"], "egais_holder": holder,
                 "egais_inn": reg["holder_id"], "egais_status": reg["status"],
                 "egais_activity": reg["activity"], "egais_outlet_address": reg["outlet_address"],
@@ -257,6 +260,8 @@ def run_catering(objects: pd.DataFrame, register: pd.DataFrame,
                        f"{row['egais_holder']}, {row['egais_outlet_address']}") if own else note
         rows.append(row)
     out = ev.make(rows)
+    if "egais_outlet_key" not in out:
+        out["egais_outlet_key"] = ""
     for c in OUT_COLUMNS[1:]:
         if c not in out:
             out[c] = np.nan if c in ("egais_distance_m", "egais_score") else ""

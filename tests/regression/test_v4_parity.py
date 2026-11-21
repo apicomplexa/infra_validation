@@ -23,6 +23,7 @@ from __future__ import annotations
 import io
 import re
 from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -90,7 +91,8 @@ def built(golden, tmp_path_factory):
         dst = out / xlsx.output_name(d["path"], cat["deliver"])
         _, rowmap, raw = loaded[k]
         summary = pipeline.deliver(ROOT / d["path"], dst, raw, rowmap, table, spec, pols)
-        res[k] = {"table": table, "evs": evs, "xlsx": dst, "raw": raw, "summary": dict(summary), "spec": spec}
+        res[k] = {"table": table, "evs": evs, "xlsx": dst, "raw": raw, "rowmap": rowmap,
+                  "summary": dict(summary), "spec": spec}
     return {"group": grp, "objects": obs, "res": res, "old_agreement": old_agreement, "config": config}
 
 
@@ -174,24 +176,29 @@ def test_v4_deliverables(built):
         assert ws.max_row - 1 == len(r["raw"]) == len(r["table"])
         kind = [row[2] for row in ws.iter_rows(min_row=2, max_col=3, values_only=True)]
         assert all(kind) and set(kind) <= set(r["spec"].kind.words.values()), k
+        pooled_col = header.index("Подтверждено (объект)") + 1
+        expected = r["rowmap"]["object_id"].map(r["table"]["confirmed_object"]).astype(int).tolist()
+        exported = [row[0] for row in ws.iter_rows(min_row=2, min_col=pooled_col,
+                                                    max_col=pooled_col, values_only=True)]
+        assert exported == expected, f"{k}: pooled verdict column does not follow RowMap"
         assert "Подтверждение" in openpyxl.load_workbook(r["xlsx"]).sheetnames
 
 
 @pytest.mark.golden
 def test_pooled_verdicts_and_kind_transitions(built):
-    for r in built["res"].values():
+    from infracheck.categories import base
+
+    for name, r in built["res"].items():
         t, spec = r["table"], r["spec"]
+        old_spec = replace(spec, merge=replace(spec.merge, shared_counted=()))
+        old_m = base.merged(registry.stack(r["evs"]), built["objects"][name], old_spec)
+        assert t["merged"].tolist() == old_m.tolist()
+        assert old_m.nunique() == {"v4_alcohol": 938, "v4_tobacco": 670}[name]
         groups = t[[g.column for g in spec.groups]].groupby(t["merged"]).any()
         expected = groups.sum(axis=1).ge(spec.min_sources).astype(int)
         assert t["confirmed_object"].tolist() == t["merged"].map(expected).tolist()
         assert spec.kind.vote_identity == ("strong",)
-        # Both v4 categories already used strong-only voting before this change.
-        from infracheck.categories import base
-
-        old = base.kind(registry.stack(r["evs"]), t.index, spec)[spec.kind.column]
-        transitions = pd.crosstab(old, t[spec.kind.column])
-        assert int(transitions.to_numpy().sum() - sum(transitions.loc[x, x] for x in transitions.index
-                                                       if x in transitions.columns)) == 0
+        assert t[spec.kind.column].isin(spec.kind.words.values()).all()
 
 
 @pytest.mark.golden

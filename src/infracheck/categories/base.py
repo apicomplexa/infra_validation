@@ -142,6 +142,7 @@ class Merge:
     column: str = ""
     pairs: tuple[tuple[str, str], ...] = ()
     shared: tuple[tuple[str, str], ...] = ()
+    shared_counted: tuple[tuple[str, str], ...] = ()
     disagree: str = ""   # appended when a record differs from its pooled object verdict
 
 
@@ -202,6 +203,7 @@ class Spec:
         merge = Merge(column=mg.get("column", ""),
                       pairs=tuple((p["check"], p["field"]) for p in mg.get("pairs", [])),
                       shared=tuple((p["check"], p["field"]) for p in mg.get("shared", [])),
+                      shared_counted=tuple((p["check"], p["field"]) for p in mg.get("shared_counted", [])),
                       disagree=mg.get("disagree", ""))
         return cls(
             name=name, checks=tuple(block["checks"]),
@@ -246,7 +248,7 @@ def _excluded(ev: pd.DataFrame, spec: Spec) -> pd.Series:
 
 def eligible(ev: pd.DataFrame, spec: Spec) -> pd.Series:
     """Rows whose axes say "this object, current", before the independence table."""
-    grouped = ev["source"].map(lambda s: spec.group_of(s) is not None)
+    grouped = ev["source"].map(lambda s: spec.group_of(s) is not None).astype(bool)
     return (ev["identity"].isin(spec.count_identity) & ev["record_state"].isin(spec.count_state)
             & ~ev["source"].isin(spec.never_count) & grouped)
 
@@ -291,9 +293,13 @@ def needs_query(ev: pd.DataFrame, index: pd.Index, spec: Spec) -> pd.Series:
 # --------------------------------------------------------------------- merging
 
 def _link_rows(ev: pd.DataFrame, check: str, fld: str) -> pd.DataFrame:
-    """Rows with links, or an empty frame when the optional field is absent."""
+    """Require link fields from checks that actually emitted evidence."""
     e = ev[ev["check"].eq(check)]
-    return e.dropna(subset=[fld]) if fld in e.columns else e.assign(**{fld: pd.Series(dtype=object)})
+    if fld not in e.columns:
+        if not e.empty:
+            raise ValueError(f"Evidence for {check!r} lacks merge link column {fld!r}")
+        return e.assign(**{fld: pd.Series(dtype=object)})
+    return e.dropna(subset=[fld])
 
 
 def merged(ev: pd.DataFrame, objects: pd.DataFrame, spec: Spec) -> pd.Series:
@@ -327,8 +333,10 @@ def merged(ev: pd.DataFrame, objects: pd.DataFrame, spec: Spec) -> pd.Series:
         for a, b in zip(e["object_id"], e[fld], strict=True):
             if a in pos and b in pos:
                 union(pos[a], pos[b])
-    for check, fld in spec.merge.shared:
+    for check, fld in (*spec.merge.shared, *spec.merge.shared_counted):
         e = _link_rows(ev, check, fld)
+        if (check, fld) in spec.merge.shared_counted:
+            e = e[counted(e, spec) & e["identity"].eq("strong") & e["record_state"].eq("current")]
         e = e[e["object_id"].isin(pos) & e[fld].astype(str).ne("")]
         for _, members in e.groupby(fld, sort=False)["object_id"]:
             first = pos[members.iloc[0]]
@@ -567,7 +575,20 @@ def _value(line: Mapping, table: pd.DataFrame, rows: pd.DataFrame, spec: Spec):
 
 def _summary_count(expr: str, table: pd.DataFrame, spec: Spec) -> tuple[int, int]:
     records = _count(_expr(table, expr, spec), table, spec)[1]
-    pooled = table.assign(confirmed=table["confirmed_object"]) if "confirmed_object" in table else table
+    m = _merged_of(table, spec)
+    if m is None:
+        return records, records
+    pooled = table.copy()
+    pooled["confirmed"] = table["confirmed_object"]
+    for g in spec.groups:
+        pooled[g.column] = table[g.column].groupby(m).transform("any")
+    pooled["n_sources"] = pooled[[g.column for g in spec.groups]].astype(int).sum(axis=1)
+    if spec.query_column and spec.query_column in table and "ya_status" in table:
+        answered = table["ya_status"].ne("").groupby(m).transform("any")
+        query = next(g for g in spec.groups if g.label == spec.query_group)
+        others = [g.column for g in spec.groups if g.label != spec.query_group]
+        pooled[spec.query_column] = (~answered & ~pooled[query.column]
+                                     & pooled[others].astype(int).sum(axis=1).eq(spec.min_sources - 1))
     return _count(_expr(pooled, expr, spec), table, spec)[0], records
 
 

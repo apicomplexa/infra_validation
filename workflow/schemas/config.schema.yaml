@@ -256,6 +256,7 @@ $defs:
           column: {type: string, pattern: "^[a-z_]+$"}
           pairs: {type: array, items: {$ref: "#/$defs/evidence_field"}}
           shared: {type: array, items: {$ref: "#/$defs/evidence_field"}}
+          shared_counted: {type: array, items: {$ref: "#/$defs/evidence_field"}}
           disagree: {type: string}
           records_word: {type: string}
         required: [column]

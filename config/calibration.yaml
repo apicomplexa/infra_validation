@@ -1,0 +1,19 @@
+seed: calibration-v1
+n_A: {Архангельск: 50, Северодвинск: 45, Новодвинск: 20}
+n_B: {Архангельск: 60, Северодвинск: 50, Новодвинск: 35}
+min_per_stratum: 5
+topup_reserve: true
+exclude_ids: []
+paths:
+  objects_dir: results/finalest
+  deliveries: config/deliveries_finalest.tsv
+  pipeline_config: config/config.yaml
+  output: results/finalest/calibration
+  cache: resources/cache/audit
+  prompt: config/audit_prompt.md
+  supervisor_checked: null
+models:
+  default: gpt-6-luna
+  effort: medium
+  escalation: gpt-6.2-sol
+  escalation_effort: high

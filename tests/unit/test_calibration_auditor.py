@@ -4,6 +4,7 @@ from unittest.mock import Mock
 import pytest
 
 from infracheck.audit.auditor import load_cache, run_batch, shard_for
+from infracheck.audit.verify import Check
 
 
 def test_batch_parses_json_and_usage(monkeypatch):
@@ -84,7 +85,7 @@ def test_audit_resume_retry_and_escalation(tmp_path, monkeypatch):
                     category_ok="yes",
                     is_vending="no",
                     quote="q",
-                    urls=["https://2gis.ru/a"],
+                    urls=["https://2gis.ru/arkhangelsk/firm/1"],
                     evidence_date="2026",
                     notes="",
                 )
@@ -94,7 +95,7 @@ def test_audit_resume_retry_and_escalation(tmp_path, monkeypatch):
         )
 
     monkeypatch.setattr("infracheck.audit.auditor.run_batch", batch)
-    monkeypatch.setattr("infracheck.audit.verify.URLVerifier.verify", lambda *args: "verified")
+    monkeypatch.setattr("infracheck.audit.verify.URLVerifier.check", lambda *args: Check("verified"))
     audit("B", batch=2, config_path=config)
     audit("B", config_path=config)
     assert len(calls) == 2
@@ -236,3 +237,54 @@ def test_shard_resume_skips_key_cached_in_another_shard(tmp_path, monkeypatch):
     assert calls == [pending_unit]
     assert (cache / "audit_A.shard2of2.jsonl").exists()
     assert not (output / "auditor_labels_A.csv").exists()
+
+
+def test_new_prompt_version_escalates_and_keeps_old_answers(tmp_path, monkeypatch):
+    import pandas as pd
+    import yaml
+
+    from infracheck.audit.auditor import audit
+
+    output, cache = tmp_path / "out", tmp_path / "cache"
+    output.mkdir()
+    cache.mkdir()
+    pd.DataFrame([{"unit_id": "x", "name": "Cafe", "city": "Архангельск", "address": "Гагарина, 1"}]).to_csv(
+        output / "auditor_input_A.csv", index=False
+    )
+    prompt = tmp_path / "prompt"
+    prompt.write_text("---\nprompt_version: 3\n---\nCheck")
+    config = tmp_path / "config.yaml"
+    config.write_text(yaml.safe_dump({
+        "paths": {"output": str(output), "cache": str(cache), "prompt": str(prompt)},
+        "models": {"default": "base", "effort": "medium", "escalation": "strong", "escalation_effort": "high"},
+    }))
+    old = dict(unit_id="x", exists="yes", open="open", category_ok="yes", is_vending="no", quote="q",
+               urls=["https://zoon.ru/x"], evidence_date="2026", notes="", prompt_version="2")
+    # A v2 escalation in a shard file, written before the v3 escalation lands in the base file.
+    (cache / "audit_A.jsonl").write_text(
+        json.dumps({**old, "auditor_model": "base", "escalated": False, "audit_date": "2020-01-01T10:00:00"}) + "\n"
+    )
+    (cache / "audit_A.shard1of2.jsonl").write_text(
+        json.dumps({**old, "auditor_model": "strong", "escalated": True, "audit_date": "2020-01-01T11:00:00"}) + "\n"
+    )
+    monkeypatch.setattr("infracheck.audit.verify.URLVerifier.check", lambda *args: Check("verified"))
+    audit("A", export_only=True, config_path=config)
+    labels = pd.read_csv(output / "auditor_labels_A.csv", dtype=str)
+    # The v2 label rests on a mirror only, so the strength rule makes it unclear.
+    assert (labels.exists_raw[0], labels.exists[0], labels.label_strength[0]) == ("yes", "unclear", "weak")
+    calls = []
+
+    def batch(rows, _template, model, effort):
+        calls.append((model, [row["unit_id"] for row in rows]))
+        return ([dict(old, urls=["https://2gis.ru/arkhangelsk/firm/1"], notes="v3")], {})
+
+    monkeypatch.setattr("infracheck.audit.auditor.run_batch", batch)
+    audit("A", escalate=True, config_path=config)
+    assert calls == [("strong", ["x"])]
+    lines = [json.loads(line) for line in (cache / "audit_A.jsonl").read_text().splitlines()]
+    assert [line["prompt_version"] for line in lines] == ["2", "3"]
+    assert (cache / "audit_A.shard1of2.jsonl").read_text().count("\n") == 1
+    labels = pd.read_csv(output / "auditor_labels_A.csv", dtype=str)
+    assert (labels.prompt_version[0], labels.exists[0], labels.label_strength[0]) == ("3", "yes", "live_card")
+    audit("A", escalate=True, config_path=config)
+    assert len(calls) == 1

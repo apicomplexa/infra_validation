@@ -36,6 +36,7 @@ FIELDS = [
     "url_outcomes",
     "n_verified",
     "n_contradicted",
+    "n_weak",
     "n_unreachable",
     "verified_url_types",
     "evidence_date",
@@ -43,6 +44,10 @@ FIELDS = [
     "auditor_model",
     "escalated",
     "notes",
+    "label_strength",
+    "exists_raw",
+    "open_raw",
+    "prompt_version",
     "initial_exists",
     "initial_open",
     "initial_category_ok",
@@ -173,7 +178,9 @@ def audit(
     version = str(front["prompt_version"])
     latest = {x["unit_id"]: x for x in existing}
     if export_only:
-        export(sample, inputs, cache_base, Path(paths["output"]), Path(paths["cache"]) / "urls")
+        # Re-grading the cache never touches the network: a page that was not
+        # cached when the labels were made stays unreachable.
+        export(sample, inputs, cache_base, Path(paths["output"]), Path(paths["cache"]) / "urls", offline=True)
         return
     if escalate:
         axes = [axis.strip() for axis in escalate_axes.split(",") if axis.strip()]
@@ -230,24 +237,33 @@ def audit(
         raise RuntimeError(f"{len(failures)} batch(es) failed: {failures}")
 
 
-def export(sample, inputs, cache, output, url_cache):
-    names = inputs.set_index("unit_id")["name"].to_dict()
+def export(sample, inputs, cache, output, url_cache, offline=False):
+    places = inputs.set_index("unit_id")
+    names = places["name"].to_dict()
+    cities = places["city"].to_dict() if "city" in places else {}
+    addresses = places["address"].to_dict() if "address" in places else {}
     latest = {}
     initial = {}
-    for row in load_cache(cache):
+    # Chronological, not file order: a later prompt version or escalation may
+    # sit in the base file while earlier answers sit in the shard files.
+    for row in sorted(load_cache(cache), key=lambda row: str(row.get("audit_date") or "")):
         unit = row["unit_id"]
         if unit in names:
             latest[unit] = row
             if not row.get("escalated"):
                 initial[unit] = row
-    verifier = URLVerifier(url_cache)
+    verifier = URLVerifier(url_cache, offline=offline)
+
+    def verified(row, unit):
+        return verify_label(row, names[unit], verifier, cities.get(unit, ""), addresses.get(unit, ""))
+
     with (output / f"auditor_labels_{sample}.csv").open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=FIELDS, extrasaction="ignore")
         writer.writeheader()
         for unit in sorted(latest):
-            label = verify_label(latest[unit], names[unit], verifier)
+            label = verified(latest[unit], unit)
             if unit in initial:
-                first = verify_label(initial[unit], names[unit], verifier)
+                first = verified(initial[unit], unit)
                 label.update({f"initial_{key}": first[key] for key in AXES})
             for key in ("urls", "url_types", "verified_url_types"):
                 label[key] = ";".join(label.get(key) or [])

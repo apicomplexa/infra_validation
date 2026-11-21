@@ -121,6 +121,21 @@ def deliver(src: Path | str, dst: Path | str, raw: pd.DataFrame, rowmap: pd.Data
     cols = [f["column"] for f in layout["front"]] + [a[1] for a in layout["appended"]]
     rows = base.to_rows(raw, rowmap, table, cols)
     summary = base.summarise(table, rows, spec)
-    legend = xlsx.legend(layout, policies, spec.min_sources, spec.min_sources_genitive)
+    if {"OSM", "GIS"} <= set(raw.columns):
+        only_osm = raw["OSM"].eq(1) & raw["GIS"].eq(0)
+    elif "providers" in raw:
+        providers = raw["providers"].fillna("").astype(str).str.lower()
+        only_osm = providers.str.contains("osm") & ~providers.str.contains("2gis")
+    else:
+        only_osm = pd.Series(False, index=raw.index)
+    n = len(raw)
+    count = int(only_osm.sum())
+    pct = 100 * count / n if n else 0.0
+    note = ("поэтому 0 часто означает нехватку независимых источников, а не отсутствие объекта."
+            if count > n / 2 else
+            "0 может означать нехватку независимых источников, а не отсутствие объекта.")
+    stats = {"only_osm_rows": count, "delivery_rows": n,
+             "only_osm_pct": f"{pct:.1f}".replace(".", ","), "osm_zero_note": note}
+    legend = xlsx.legend(layout, policies, spec.min_sources, spec.min_sources_genitive, stats)
     xlsx.write(src, dst, rows, xlsx.sheet_columns(raw), summary, legend, layout)
     return summary

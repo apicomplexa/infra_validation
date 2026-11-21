@@ -431,11 +431,11 @@ class V4Result:
 
 # How the name agreed, for the reader of «Основания».
 BASIS_RU = {lms.BASIS_MANUAL: "известная сеть", lms.BASIS_LEARNED: "выученная пара вывеска → ИНН",
-            lms.BASIS_FUZZY: "совпадает название"}
+            lms.BASIS_FUZZY: "совпадает название", "venue": "совпадает название заведения"}
 
 
 def name_agrees(ob: pd.DataFrame, register: pd.DataFrame, table: pd.DataFrame,
-                policy: lm.Policy, brands: lm.BrandResult | None) -> np.ndarray:
+                policy: lm.Policy, brands: lm.BrandResult | None, *, include_venue: bool = True) -> np.ndarray:
     """Does the object's own licence agree with its name?  One bool per object.
 
     The licence is the object's by the join's rules, but the join (`tiebreak`)
@@ -448,6 +448,7 @@ def name_agrees(ob: pd.DataFrame, register: pd.DataFrame, table: pd.DataFrame,
       resting on all its voting addresses would confirm itself there;
     * `fuzzy` -- the names compared as strings agree by `licmatch.names_agree`,
       the word-level test the catering join requires;
+    * the venue in the premises text may also agree, without altering the join;
     * `generic` -- never: «Продукты» names no holder.
 
     Rows without an own licence are False.
@@ -462,6 +463,7 @@ def name_agrees(ob: pd.DataFrame, register: pd.DataFrame, table: pd.DataFrame,
         ok = bt["used"] & (bt["loo_accepted"] | (bt["review"] == lms.REVIEW_ACCEPT))
         good = set(zip(bt.loc[ok, "fascia"], bt.loc[ok, "holder"], strict=True))
     holders = register["holder_name"].astype(str).to_numpy()
+    venues = register["venue_name"].fillna("").astype(str).to_numpy()
     inns = register["holder_id"].astype(str).to_numpy()
     out = np.zeros(len(ob), dtype=bool)
     for i, name in enumerate(ob["name"].fillna("").astype(str)):
@@ -476,6 +478,9 @@ def name_agrees(ob: pd.DataFrame, register: pd.DataFrame, table: pd.DataFrame,
         elif b == lms.BASIS_FUZZY:
             out[i] = lm.names_agree(lm.fascia_name(name, aliases=aliases),
                                     lm.holder_name(holders[rec[i]], aliases=aliases), policy.place_words)
+        if include_venue and not out[i] and b != lms.BASIS_GENERIC:
+            out[i] = lm.names_agree(lm.fascia_name(name, aliases=aliases),
+                                    lm.fascia_name(venues[rec[i]], aliases=aliases), policy.place_words)
     return out
 
 
@@ -500,7 +505,7 @@ def _v4_text(st: str, risk: str, agrees: bool, basis: str, reg: pd.Series | None
         if agrees:
             return f"{lic}; имя: {BASIS_RU.get(basis, basis)}"
         why = ("вывеска общая — владельца по ней не установить" if basis == lms.BASIS_GENERIC
-               else "имя владельца с вывеской не сходится")
+               else "имя владельца или заведения с вывеской не сходится")
         return f"{lic} — закреплена по адресу, но {why}"
     if st == lm.INACTIVE:
         when = _fmt_date(reg["status_changed"]) if reg is not None else ""
@@ -588,6 +593,8 @@ def match_v4(ob: pd.DataFrame, register: pd.DataFrame, policy: lm.Policy | None 
             out[c] = pd.to_numeric(out[c].astype(str))
 
     agrees = name_agrees(ob, register, t, policy, mr.brand)
+    holder_agrees = name_agrees(ob, register, t, policy, mr.brand, include_venue=False)
+    agrees = np.where(risk == DIRECT_RISK, agrees, holder_agrees)
     rows = []
     for i, (oid, r) in enumerate(t.iterrows()):
         st = r["status"]
@@ -601,7 +608,8 @@ def match_v4(ob: pd.DataFrame, register: pd.DataFrame, policy: lm.Policy | None 
                # The join's shop: records within 50 m naming one brand (licmatch `entity`).
                "egais_entity": r["entity"],
                **out.iloc[i].to_dict(),
-               "text": _v4_text(st, risk[i], bool(agrees[i]), basis[i], reg,
+               "text": _v4_text(st, risk[i], bool(agrees[i]),
+                                "venue" if agrees[i] and not holder_agrees[i] else basis[i], reg,
                                 out["licence_evidence"].iat[i], out["licence_claimed_by"].iat[i])}
         if reg is not None:
             row.update({"kind_text": reg["kind"], "kind_scheme": KIND_SCHEME,

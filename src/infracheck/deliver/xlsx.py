@@ -38,9 +38,10 @@ def sheet_columns(raw: pd.DataFrame) -> list[str]:
 
 
 def legend(layout: Mapping, policies: Mapping[str, object], min_sources: int,
-           min_sources_genitive: str) -> list[tuple[str, str]]:
+           min_sources_genitive: str, delivery_stats: Mapping | None = None) -> list[tuple[str, str]]:
     """The «Как читать» rows, thresholds interpolated from the Policies used."""
     ns = dict(policies, min_sources=min_sources, min_sources_genitive=min_sources_genitive)
+    ns.update(delivery_stats or {})
     return [(k, v.format(**ns)) for k, v in layout["legend"]]
 
 

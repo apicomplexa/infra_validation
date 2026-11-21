@@ -29,6 +29,7 @@ ROOT = Path(__file__).resolve().parents[2]
 FINALEST = ROOT / "results" / "finalest"
 OUT = FINALEST / "deliverable"
 METHODOLOGY = ROOT / "docs" / "methodology_finalest.md"
+MERGE_REVIEW = ROOT / "results" / "finalest" / "calibration" / "diagnostics" / "osm_gis_merge.csv"
 DELIVERIES = ROOT / "config" / "deliveries_finalest.tsv"
 
 CITY_ORDER = ["Архангельск", "Северодвинск", "Новодвинск"]
@@ -517,7 +518,22 @@ def main(argv: list[str] | None = None) -> None:
     write_xlsx(out / "сводка.xlsx", table, weak, provenance)
     (out / "сводка.md").write_text(summary_md(table, weak, provenance, head), encoding="utf-8")
     shutil.copy2(METHODOLOGY, out / "methodology.md")
-    (out / "README.md").write_text(readme(table, deliveries, head), encoding="utf-8")
+    text = readme(table, deliveries, head)
+    if MERGE_REVIEW.exists():
+        # Contractor OSM+2GIS merges whose names disagree: a review list, never a filter.
+        merge = pd.read_csv(MERGE_REVIEW, encoding="utf-8-sig")
+        merge = merge[merge["low"]].sort_values(["only_osm_gis", "cat", "city"], ascending=[False, True, True])
+        merge.to_excel(out / "к_проверке_склейки_OSM_2GIS.xlsx", index=False)
+        text += (
+            "\n## Список к проверке: склейки OSM + 2GIS с несхожими именами\n\n"
+            f"`к_проверке_склейки_OSM_2GIS.xlsx` — {len(merge)} подтверждённых объектов, у которых подрядчик "
+            "склеил запись OSM и запись 2GIS с несхожими именами (сходство < 72). "
+            f"{int(merge['only_osm_gis'].sum())} из них подтверждены только этими двумя флагами "
+            "(`only_osm_gis = True`, они в начале списка) — такие подтверждения могут быть ложными "
+            "(два заведения в одном доме). Низкое сходство не доказывает ошибку (оператор и вывеска "
+            "одной сети), поэтому это список для проверки, а не исключение. Подробно — methodology.md §7, п. 9.\n"
+        )
+    (out / "README.md").write_text(text, encoding="utf-8")
     print(f"{out}: {len(deliveries)} книг, сводка, methodology.md, README.md")
 
 

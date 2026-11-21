@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import re
 import subprocess
@@ -71,10 +72,20 @@ SCHEMA = {
 
 
 def load_cache(path):
-    if not path.exists():
-        return []
-    with path.open(encoding="utf-8") as handle:
-        return [json.loads(line) for line in handle if line.strip()]
+    path = Path(path)
+    paths = sorted(path.parent.glob(f"{path.stem}.*{path.suffix}"))
+    if path.exists():
+        paths.insert(0, path)
+    rows = []
+    for cache_path in paths:
+        with cache_path.open(encoding="utf-8") as handle:
+            rows.extend(json.loads(line) for line in handle if line.strip())
+    return rows
+
+
+def shard_for(unit_id, shard_count):
+    digest = hashlib.sha256(str(unit_id).encode("utf-8")).digest()
+    return int.from_bytes(digest, "big") % shard_count
 
 
 def run_batch(rows, template, model, effort, timeout=900):
@@ -136,6 +147,7 @@ def audit(
     escalate=False,
     export_only=False,
     config_path="config/calibration.yaml",
+    shard=None,
 ):
     cfg = yaml.safe_load(Path(config_path).read_text(encoding="utf-8"))
     paths = cfg["paths"]
@@ -147,14 +159,20 @@ def audit(
     if batch < 1 or (limit is not None and limit < 0):
         raise ValueError("Invalid batch size or limit")
     inputs = pd.read_csv(Path(paths["output"]) / f"auditor_input_{sample}.csv").fillna("")
-    cache = Path(paths["cache"]) / f"audit_{sample}.jsonl"
-    existing = load_cache(cache)
+    cache_base = Path(paths["cache"]) / f"audit_{sample}.jsonl"
+    cache = cache_base
+    if shard is not None:
+        shard_index, shard_count = shard
+        if shard_count < 1 or shard_index < 1 or shard_index > shard_count:
+            raise ValueError("Shard must be K/N with 1 <= K <= N")
+        cache = cache_base.with_name(f"audit_{sample}.shard{shard_index}of{shard_count}.jsonl")
+    existing = load_cache(cache_base)
     prompt = Path(paths["prompt"]).read_text(encoding="utf-8")
     front = yaml.safe_load(prompt.split("---", 2)[1])
     version = str(front["prompt_version"])
     latest = {x["unit_id"]: x for x in existing}
     if export_only:
-        export(sample, inputs, cache, Path(paths["output"]), Path(paths["cache"]) / "urls")
+        export(sample, inputs, cache_base, Path(paths["output"]), Path(paths["cache"]) / "urls")
         return
     if escalate:
         verified_path = Path(paths["output"]) / f"auditor_labels_{sample}.csv"
@@ -166,6 +184,8 @@ def audit(
     candidates = []
     for row in inputs.to_dict("records"):
         unit = row["unit_id"]
+        if shard is not None and shard_for(unit, shard_count) != shard_index - 1:
+            continue
         if (unit, version, model) in cached:
             continue
         if escalate and (unit not in latest or not any(latest[unit].get(k) == "unclear" for k in AXES)):
@@ -200,7 +220,8 @@ def audit(
                     token_usage=usage,
                 )
                 handle.write(json.dumps(label, ensure_ascii=False) + "\n")
-    export(sample, inputs, cache, Path(paths["output"]), Path(paths["cache"]) / "urls")
+    if shard is None:
+        export(sample, inputs, cache_base, Path(paths["output"]), Path(paths["cache"]) / "urls")
     if failures:
         raise RuntimeError(f"{len(failures)} batch(es) failed: {failures}")
 
@@ -239,6 +260,16 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--escalate", action="store_true")
     parser.add_argument("--export-only", action="store_true")
+    def parse_shard(value):
+        try:
+            shard_index, shard_count = (int(part) for part in value.split("/", 1))
+        except (ValueError, TypeError):
+            raise argparse.ArgumentTypeError("Shard must be K/N") from None
+        if shard_index < 1 or shard_count < 1 or shard_index > shard_count:
+            raise argparse.ArgumentTypeError("Shard must satisfy 1 <= K <= N")
+        return shard_index, shard_count
+
+    parser.add_argument("--shard", type=parse_shard)
     audit(**vars(parser.parse_args()))
 
 

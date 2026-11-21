@@ -3,7 +3,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from infracheck.audit.auditor import run_batch
+from infracheck.audit.auditor import load_cache, run_batch, shard_for
 
 
 def test_batch_parses_json_and_usage(monkeypatch):
@@ -146,3 +146,59 @@ def test_failed_batch_never_cached(tmp_path, monkeypatch):
         audit("A", config_path=config)
     assert len(calls) == 2
     assert (tmp_path / "cache" / "audit_A.jsonl").read_text() == ""
+
+
+def test_shard_partition_covers_every_unit_once():
+    units = [f"unit-{i}" for i in range(100)]
+    partitions = [[unit for unit in units if shard_for(unit, 4) == index] for index in range(4)]
+    assert all(partitions)
+    assert sorted(unit for partition in partitions for unit in partition) == sorted(units)
+
+
+def test_load_cache_unions_base_and_shard_files(tmp_path):
+    base = tmp_path / "audit_A.jsonl"
+    base.write_text('{"unit_id":"x","value":"base"}\n')
+    (tmp_path / "audit_A.shard1of2.jsonl").write_text(
+        '{"unit_id":"x","value":"shard"}\n{"unit_id":"y"}\n'
+    )
+    rows = load_cache(base)
+    assert [row["unit_id"] for row in rows] == ["x", "x", "y"]
+    assert {row["unit_id"]: row for row in rows}["x"]["value"] == "shard"
+
+
+def test_shard_resume_skips_key_cached_in_another_shard(tmp_path, monkeypatch):
+    import pandas as pd
+    import yaml
+
+    from infracheck.audit.auditor import audit
+
+    output, cache = tmp_path / "out", tmp_path / "cache"
+    output.mkdir()
+    cached_unit = next(f"unit-{i}" for i in range(100) if shard_for(f"unit-{i}", 2) == 0)
+    pending_unit = next(f"unit-{i}" for i in range(100) if shard_for(f"unit-{i}", 2) == 1)
+    units = [cached_unit, pending_unit]
+    pd.DataFrame([{"unit_id": unit, "name": unit} for unit in units]).to_csv(
+        output / "auditor_input_A.csv", index=False
+    )
+    prompt = tmp_path / "prompt"
+    prompt.write_text("---\nprompt_version: 1\n---\nCheck")
+    config = tmp_path / "config.yaml"
+    config.write_text(yaml.safe_dump({
+        "paths": {"output": str(output), "cache": str(cache), "prompt": str(prompt)},
+        "models": {"default": "base", "effort": "medium"},
+    }))
+    cache.mkdir()
+    (cache / "audit_A.shard1of2.jsonl").write_text(
+        json.dumps({"unit_id": cached_unit, "prompt_version": "1", "auditor_model": "base"}) + "\n"
+    )
+    calls = []
+
+    def batch(rows, *_args):
+        calls.extend(row["unit_id"] for row in rows)
+        return ([], {})
+
+    monkeypatch.setattr("infracheck.audit.auditor.run_batch", batch)
+    audit("A", shard=(2, 2), config_path=config)
+    assert calls == [pending_unit]
+    assert (cache / "audit_A.shard2of2.jsonl").exists()
+    assert not (output / "auditor_labels_A.csv").exists()

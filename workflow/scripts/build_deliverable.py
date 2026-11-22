@@ -30,6 +30,7 @@ FINALEST = ROOT / "results" / "finalest"
 OUT = FINALEST / "deliverable"
 METHODOLOGY = ROOT / "docs" / "methodology_finalest.md"
 MERGE_REVIEW = ROOT / "results" / "finalest" / "calibration" / "diagnostics" / "osm_gis_merge.csv"
+IV_EVAL = ROOT / "results" / "finalest" / "internal_validity" / "eval"
 DELIVERIES = ROOT / "config" / "deliveries_finalest.tsv"
 
 CITY_ORDER = ["Архангельск", "Северодвинск", "Новодвинск"]
@@ -501,6 +502,79 @@ def readme(table: pd.DataFrame, deliveries: list[Delivery], head: str) -> str:
 """
 
 
+# Rows of the README's internal-validity table: source key of metrics.csv -> label.
+IV_ROWS = {
+    "yandex": "Яндекс (наша проверка)",
+    "yandex_contractor": "Яндекс подрядчика",
+    "relink": "Соседняя запись выгрузки (relink)",
+    "fsq": "Foursquare",
+    "overture": "Overture",
+    "egais": "ЕГАИС",
+    "own": "**Все решения конвейера, без склейки** (взвешено по популяции решений)",
+    "merge": "Склейка подрядчика OSM↔2GIS (принята на веру)",
+}
+
+
+def iv_pct(x: float) -> str:
+    return f"{100 * x:.1f}".replace(".", ",")
+
+
+def iv_cell(m: pd.DataFrame, source: str, metric: str) -> str:
+    """'a % [lo; hi] (границы x–y %)', or counts only where fewer than 10 labels are resolved."""
+    r = m[(m["reference"] == "consensus") & (m["source"] == source) & (m["metric"] == metric)]
+    if r.empty:
+        return "—"
+    r = r.iloc[0]
+    if not bool(r["sufficient"]):
+        return f"данных недостаточно ({int(r['bad'])} из {int(r['resolved'])})"
+    return (f"{iv_pct(r['point'])} % [{iv_pct(r['lo95'])}; {iv_pct(r['hi95'])}] "
+            f"(границы {iv_pct(r['bound_lo'])}–{iv_pct(r['bound_hi'])} %)")
+
+
+def internal_validity_md(eval_dir: Path = IV_EVAL) -> str:
+    """README block from `pixi run internal-validity`; numbers are read, never typed in."""
+    path = eval_dir / "metrics.csv"
+    if not path.exists():
+        raise SystemExit(f"{rel(path)} is missing: run `pixi run internal-validity` first")
+    m = pd.read_csv(path, encoding="utf-8-sig")
+    ag = pd.read_csv(eval_dir / "agreement.csv", encoding="utf-8-sig")
+    kappa = ag[(ag["source"] == "all") & (ag["question"] == "same_org")]["kappa"].iloc[0]
+    kappa = f"{kappa:.2f}".replace(".", ",")
+    rows = "\n".join(f"| {label} | {iv_cell(m, src, 'false_accept')} | {iv_cell(m, src, 'false_reject')} |"
+                     for src, label in IV_ROWS.items())
+    own_fa, own_fr = iv_cell(m, "own", "false_accept"), iv_cell(m, "own", "false_reject")
+    merge_fa = iv_cell(m, "merge", "false_accept")
+    head = "| Источник | Ложные принятия: P(не тот \\| принят) | Ложные отказы: P(тот \\| отвергнут) |"
+    return f"""
+## Внутренняя корректность vs внешняя достоверность
+
+Это разные вопросы. **Внутренняя корректность** — верно ли конвейер сопоставляет объект с записями
+*своих* источников (кэш Яндекса, снимки Overture и Foursquare, выписка ЕГАИС, лист `quality`
+подрядчика). **Внешняя достоверность** — существует ли объект на самом деле (§8, раздел выше). Первое
+не доказывает второго: верно сопоставленная устаревшая карточка остаётся устаревшей.
+
+Оценка: 260 решений «объект ↔ запись» в 22 стратах, два слепых судьи-LLM разных моделей (Sonnet,
+Opus), только по данным пакета; эталон — совпавшие ответы, остальное входит в границы. Веса — популяция
+решений страты / выборка. 95 % ДИ — Уилсон по эффективному объёму. Разведочно, без поправки на
+множественность (methodology.md, §9).
+
+{head}
+|---|---|---|
+{rows}
+
+**Вывод.** При доступе к источникам Яндекс, Foursquare, Overture, ЕГАИС, соседние записи выгрузки и
+Яндекс подрядчика конвейер ошибочно принимает совпадение в {own_fa} случаев и ошибочно отвергает
+лучшего кандидата в {own_fr} случаев. Обе доли взвешены по популяции всех решений этих источников;
+по источникам — таблица. Склейка OSM↔2GIS, которую конвейер берёт у подрядчика без проверки, содержит
+запись другой организации в {merge_fa} склеек. Это не обязательно ложное подтверждение: какая запись
+от какого провайдера, в выгрузке не указано.
+
+Оговорки: судьи — языковые модели, не человек (согласие κ = {kappa}); ложные отказы оценены на
+лучшем отвергнутом кандидате в радиусе проверки, отказы по расстоянию в оценку не входят; часть
+решений ЕГАИС требует знать, какое юрлицо держит вывеску, и осталась неясной.
+"""
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", type=Path, default=OUT)
@@ -531,7 +605,7 @@ def main(argv: list[str] | None = None) -> None:
     write_xlsx(out / "сводка.xlsx", table, weak, provenance)
     (out / "сводка.md").write_text(summary_md(table, weak, provenance, head), encoding="utf-8")
     shutil.copy2(METHODOLOGY, out / "methodology.md")
-    text = readme(table, deliveries, head)
+    text = readme(table, deliveries, head) + internal_validity_md()
     if MERGE_REVIEW.exists():
         # Contractor OSM+2GIS merges whose names disagree: a review list, never a filter.
         merge = pd.read_csv(MERGE_REVIEW, encoding="utf-8-sig")

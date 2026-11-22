@@ -56,3 +56,4 @@ calibration-audit = { cmd = "python -m infracheck.audit.auditor", description = 
 calibration-grid = { cmd = "python -m infracheck.audit.grid", description = "Run the offline calibration grid on sample A" }
 calibration-evaluate = { cmd = "python -m infracheck.audit.evaluate", description = "Evaluate calibration audit labels" }
 calibration-human-check = { cmd = "python -m infracheck.audit.human_check", description = "Create the blind human calibration workbook" }
+internal-validity = { cmd = "python workflow/scripts/internal_validity_eval.py", description = "Evaluate the internal-validity sample: false accept / reject rates per source from two blind LLM judges (reads results/finalest/internal_validity/, writes its eval/)" }

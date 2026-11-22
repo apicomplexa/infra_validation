@@ -48,3 +48,17 @@ def test_source_counts_are_per_group_not_summed():
 def test_unknown_group_is_refused():
     with pytest.raises(ValueError):
         bd.source_counts({"OSM; Google": 1})
+
+
+def test_internal_validity_cells_read_the_metrics_and_hide_small_domains():
+    import pandas as pd
+
+    m = pd.DataFrame([
+        {"reference": "consensus", "source": "own", "metric": "false_accept", "sufficient": True, "bad": 0,
+         "resolved": 116, "point": 0.0, "lo95": 0.0, "hi95": 0.063, "bound_lo": 0.0, "bound_hi": 0.032},
+        {"reference": "consensus", "source": "relink", "metric": "false_reject", "sufficient": False, "bad": 1,
+         "resolved": 4, "point": None, "lo95": None, "hi95": None, "bound_lo": 0.2, "bound_hi": 0.4},
+    ])
+    assert bd.iv_cell(m, "own", "false_accept") == "0,0 % [0,0; 6,3] (границы 0,0–3,2 %)"
+    assert bd.iv_cell(m, "relink", "false_reject") == "данных недостаточно (1 из 4)"
+    assert bd.iv_cell(m, "merge", "false_reject") == "—"

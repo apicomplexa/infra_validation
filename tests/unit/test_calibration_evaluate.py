@@ -9,6 +9,7 @@ from infracheck.audit.evaluate import (
     evaluate,
     human_kappa,
     metric_rows,
+    variance_groups,
     weighted_ratio,
 )
 from infracheck.audit.human_check import HEADERS
@@ -158,3 +159,85 @@ def test_human_kappa_reads_and_validates_completed_xlsx(tmp_path):
     human_kappa(data, path, tmp_path)
     assert set(pd.read_csv(tmp_path / "human_kappa.csv").axis) == {"exists", "open", "category_ok", "E"}
     assert len(pd.read_csv(tmp_path / "human_confusion.csv")) > 0
+
+
+def _two_strata(e_s2):
+    """S1 with three resolved units and S2 (N = 10) whose labels are given."""
+    n2 = len(e_s2)
+    return pd.DataFrame(
+        {
+            "unit_id": [f"u{i}" for i in range(3 + n2)],
+            "delivery": ["d"] * (3 + n2),
+            "stratum": ["S1"] * 3 + ["S2"] * n2,
+            "population_N": [30] * 3 + [10] * n2,
+            "y": [1.0, 0.0, 1.0, *e_s2],
+            "one": 1.0,
+        }
+    )
+
+
+def test_singleton_resolved_stratum_is_pooled_for_variance_only():
+    # S2 has five sampled units, four unresolved: one resolved label remains.
+    data = _two_strata([1.0, np.nan, np.nan, np.nan, np.nan])
+    result = weighted_ratio(data, "y", "one", bootstrap=50)
+    # Point weights stay N_h / n_h on resolved units: (30 * 2/3 + 10 * 1) / 40.
+    assert result["estimate"] == pytest.approx((20 + 10) / 40)
+    assert np.isfinite(result["low"]) and result["low"] < result["estimate"] < result["high"]
+
+
+def test_variance_groups_is_shared_with_the_grid_and_follows_its_rule():
+    from infracheck.audit import grid
+
+    assert grid.variance_groups is variance_groups
+    alloc = pd.DataFrame(
+        {"delivery": ["d"] * 4, "stratum": ["S1", "S2", "S3", "S4"], "N_h": [30, 10, 20, 40], "n": [3, 1, 1, 1]}
+    )
+    data = pd.DataFrame({"delivery": ["d"] * 6, "stratum": ["S1", "S1", "S1", "S2", "S3", "S4"]})
+    pooled, groups = variance_groups(data, alloc, "n")
+    # S2 -> S1 (grid rule); S4 -> S3, S3 -> S1 (extension): one group of every stratum.
+    assert set(pooled.variance_stratum) == {"S1"}
+    assert groups.n.tolist() == [6]
+    lonely = pd.DataFrame({"delivery": ["e"], "stratum": ["S4"], "N_h": [27], "n": [1]})
+    _, alone = variance_groups(lonely.drop(columns=["N_h", "n"]), lonely, "n")
+    assert alone.n.tolist() == [1]  # No partner in the delivery: left to the caller.
+
+
+def test_unpooled_variance_matches_protocol_formula():
+    data = _two_strata([1.0, 0.0, 0.0, 1.0, 1.0])
+    result = weighted_ratio(data, "y", "one", bootstrap=0)
+    w = data.population_N / data.groupby("stratum").unit_id.transform("size")
+    theta = (w * data.y).sum() / w.sum()
+    z = (data.y - theta) / w.sum()
+    variance = sum(
+        g.population_N.iloc[0] ** 2 * (1 - len(g) / g.population_N.iloc[0]) * z[g.index].var(ddof=1) / len(g)
+        for _, g in data.groupby("stratum")
+    )
+    from statistics import NormalDist
+
+    zq = NormalDist().inv_cdf(0.975)
+    n_eff = theta * (1 - theta) / variance
+    centre = (theta + zq**2 / (2 * n_eff)) / (1 + zq**2 / n_eff)
+    assert (result["low"] + result["high"]) / 2 == pytest.approx(centre)
+
+
+def test_specificity_bounds_are_ordered():
+    data = _known_data()
+    data.loc[data.unit_id.isin(["a", "c"]), "E"] = np.nan
+    rows = {row["metric"]: row for row in metric_rows(data, bootstrap=0)}
+    for metric in ("sensitivity existence", "specificity existence", "PPV existence", "NPV existence"):
+        assert rows[metric]["unclear_low"] <= rows[metric]["unclear_high"], metric
+
+
+def test_rests_on_yandex_card_only_when_every_verified_card_is_yandex():
+    from infracheck.audit.evaluate import rests_on_yandex_card
+
+    row = {
+        "label_strength": "live_card",
+        "urls": "https://yandex.ru/maps/org/tortik/1/;https://arkh.bebeshka.info/tortik/",
+        "url_outcomes": "verified;verified",
+    }
+    assert rests_on_yandex_card(row, "Тортик")
+    assert not rests_on_yandex_card({**row, "label_strength": "dated"}, "Тортик")
+    with_vk = {**row, "urls": row["urls"] + ";https://vk.com/tortik", "url_outcomes": "verified;verified;verified"}
+    assert not rests_on_yandex_card(with_vk, "Тортик")
+    assert not rests_on_yandex_card({**row, "url_outcomes": "unreachable;verified"}, "Тортик")

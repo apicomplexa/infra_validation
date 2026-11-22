@@ -11,6 +11,7 @@ import pandas as pd
 import yaml
 
 from infracheck.audit.human_check import read_filled_workbook
+from infracheck.audit.verify import is_primary, source_type
 
 YES_KINDS = {"да", "yes", "confirmed", "conf"}
 NO_KINDS = {"нет", "no", "not", "rejected"}
@@ -34,7 +35,24 @@ REPORT_ANALYSES = {
     "main": "основной",
     "dependent_as_unclear": "зависимые метки как неясные",
     "without_yandex": "без опоры только на Яндекс",
+    "yandex_card_shared": "без живой карточки Яндекса при засчитанном Яндексе",
 }
+
+
+def rests_on_yandex_card(row, name):
+    """True when a label's strength is a live card and every verified card is Yandex's.
+
+    Rule §2.1 (b) lets one live directory card carry `exists = yes`. Where that
+    card is a Yandex Maps organisation page and the pipeline itself counted
+    Yandex for the object, auditor and pipeline read the same record, and the
+    agreement says nothing independent (protocol §6).
+    """
+    if row.get("label_strength") != "live_card":
+        return False
+    urls = [u.strip() for u in str(row.get("urls") or "").split(";") if u.strip()]
+    outcomes = [o.strip() for o in str(row.get("url_outcomes") or "").split(";")]
+    cards = [u for u, o in zip(urls, outcomes, strict=False) if o == "verified" and is_primary(u, name)]
+    return bool(cards) and all(source_type(u) == "yandex" for u in cards)
 
 
 def reference_exists(row):
@@ -59,7 +77,58 @@ def wilson_interval(estimate, variance, n_fallback, alpha=0.05):
     return max(0.0, center - half), min(1.0, center + half)
 
 
-def weighted_ratio(frame, numerator, denominator, strata=None, bootstrap=4000, seed=20261121, alpha=0.05):
+# Pooling partners for a singleton stratum, in order of preference. The first
+# entries are the grid rule (S2 with S1, otherwise with S3); the rest extend it
+# to strata the grid never met: S3 goes to another confirmed stratum first.
+POOL_ORDER = {
+    "S1": ("S3", "S2", "S4"),
+    "S2": ("S1", "S3", "S4"),
+    "S3": ("S1", "S2", "S4"),
+    "S4": ("S3", "S1", "S2"),
+}
+
+
+def variance_groups(data, allocation, n_column="n_A_h"):
+    """Collapse singleton non-census strata for variance, preserving point weights.
+
+    A stratum with one observation and N_h > 1 has no within-stratum variance
+    estimate. For variance only, it is pooled within the same delivery with the
+    first stratum of `POOL_ORDER` that has observations: S2 with S1, otherwise
+    with S3 (the rule the calibration grid was frozen with), S3 with S1, then
+    S2, then S4. Pooling is transitive, so two singletons that pick each other
+    form one group. A singleton with no partner in its delivery stays alone;
+    the caller decides what to do with it. Point estimates keep the original
+    N_h / n_h weights. The grid (sample A) passes the design sizes `n_A_h`; the
+    B evaluation passes the number of units carrying a resolved value for the
+    metric at hand, because unresolved labels are what leave a B stratum with
+    a single observation.
+    """
+    rows = list(allocation.itertuples())
+    present = {(r.delivery, r.stratum) for r in rows if getattr(r, n_column) > 0}
+    parent = {(r.delivery, r.stratum): (r.delivery, r.stratum) for r in rows}
+
+    def find(key):
+        while parent[key] != key:
+            key = parent[key]
+        return key
+
+    for r in rows:
+        if getattr(r, n_column) == 1 and r.N_h > 1:
+            partner = next(((r.delivery, s) for s in POOL_ORDER.get(r.stratum, ()) if (r.delivery, s) in present), None)
+            if partner is not None:
+                a, b = find((r.delivery, r.stratum)), find(partner)
+                if a != b:
+                    # The partner's root names the group, so S2 pooled into S1 is "S1".
+                    parent[a] = b
+    mapping = {key: find(key)[1] for key in parent}
+    result = data.copy()
+    result["variance_stratum"] = [mapping[(d, s)] for d, s in zip(result.delivery, result.stratum, strict=False)]
+    alloc = allocation.copy()
+    alloc["variance_stratum"] = [mapping[(d, s)] for d, s in zip(alloc.delivery, alloc.stratum, strict=False)]
+    return result, alloc.groupby(["delivery", "variance_stratum"], as_index=False)[["N_h", n_column]].sum()
+
+
+def weighted_ratio(frame, numerator, denominator, bootstrap=4000, seed=20261121, alpha=0.05):
     """Estimate ratio of HT totals, linearized variance, and stratified bootstrap CI."""
     data = frame.copy()
     data = data[data[denominator].notna() & data[numerator].notna()].copy()
@@ -72,8 +141,7 @@ def weighted_ratio(frame, numerator, denominator, strata=None, bootstrap=4000, s
             "bootstrap_high": np.nan,
             "n": 0,
         }
-    strata = strata or ["delivery", "stratum"]
-    counts = data.groupby(strata, dropna=False)["unit_id"].transform("size")
+    counts = data.groupby(["delivery", "stratum"], dropna=False)["unit_id"].transform("size")
     data["analysis_weight"] = data.population_N / counts
     total_b = (data.analysis_weight * data[denominator]).sum()
     if total_b == 0:
@@ -86,26 +154,33 @@ def weighted_ratio(frame, numerator, denominator, strata=None, bootstrap=4000, s
             "n": 0,
         }
     estimate = (data.analysis_weight * data[numerator]).sum() / total_b
+    # Strata left with one resolved unit are pooled for variance only (same rule as grid).
+    observed = data.groupby(["delivery", "stratum"], as_index=False, dropna=False).agg(
+        N_h=("population_N", "first"), n_obs=("unit_id", "size")
+    )
+    data, pooled = variance_groups(data, observed, "n_obs")
+    group_key = ["delivery", "variance_stratum"]
+    sizes = {(r.delivery, r.variance_stratum): (r.n_obs, float(r.N_h)) for r in pooled.itertuples()}
+    groups = [(sizes[key], g) for key, g in data.groupby(group_key, dropna=False)]
     variance = 0.0
-    for _, group in data.groupby(strata, dropna=False):
-        n = len(group)
-        N = float(group.population_N.iloc[0])
-        if n == 1 and N > 1:
-            raise ValueError("Cannot estimate design variance from a singleton non-census stratum")
+    for (n, N), group in groups:
         if n >= N:
             continue
-        z = (group[numerator] - estimate * group[denominator]) / total_b
-        variance += N**2 * (1 - n / N) * z.var(ddof=1) / n
+        # Weighted linearisation; equals N^2 (1 - f) s_z^2 / n inside an unpooled stratum.
+        u = group.analysis_weight * (group[numerator] - estimate * group[denominator]) / total_b
+        if n == 1:
+            # A singleton with no partner in its delivery: centre on the overall mean of u,
+            # which is 0 for a ratio (survey's lonely.psu = "adjust"; conservative).
+            variance += (1 - 1 / N) * float((u**2).sum())
+        else:
+            variance += (1 - n / N) * n / (n - 1) * float(((u - u.mean()) ** 2).sum())
     low, high = wilson_interval(estimate, variance, len(data), 0.05)
     bonf_low, bonf_high = wilson_interval(estimate, variance, len(data), alpha)
     rng = np.random.default_rng(seed)
     reps = []
-    groups = [g for _, g in data.groupby(strata, dropna=False)]
     for _ in range(bootstrap):
         nums = denoms = 0.0
-        for group in groups:
-            n = len(group)
-            N = float(group.population_N.iloc[0])
+        for (n, N), group in groups:
             # Rao-Wu rescaling preserves the stratum's fixed sample size.
             draws = rng.choice(n, size=max(n - 1, 1), replace=True)
             counts = np.bincount(draws, minlength=n).astype(float)
@@ -120,6 +195,11 @@ def weighted_ratio(frame, numerator, denominator, strata=None, bootstrap=4000, s
         # Publish the wider interval if bootstrap and linearization differ materially.
         if max(abs(blo - low), abs(bhi - high)) > 0.02:
             low, high = min(low, blo), max(high, bhi)
+        # The same rule at the Bonferroni level, so that interval is never the narrower one.
+        b_lo, b_hi = np.quantile(reps, [alpha / 2, 1 - alpha / 2])
+        if max(abs(b_lo - bonf_low), abs(b_hi - bonf_high)) > 0.02:
+            bonf_low, bonf_high = min(bonf_low, b_lo), max(bonf_high, b_hi)
+        bonf_low, bonf_high = min(bonf_low, low), max(bonf_high, high)
     else:
         blo = bhi = np.nan
     return {
@@ -227,11 +307,9 @@ def metric_rows(data, label="main", bootstrap=4000):
                 if name in {"sensitivity existence", "specificity existence"}:
                     unknown = bounded.E.isna()
                     positive = bounded.pipeline_exists.eq(1)
-                    assignment = (
-                        np.where(positive, value, 1 - value)
-                        if name == "sensitivity existence"
-                        else np.where(positive, 1 - value, value)
-                    )
+                    # Against the pipeline (value = 0) both rates fall when unknown positives are
+                    # false positives and unknown negatives are misses; in favour, the reverse.
+                    assignment = np.where(positive, value, 1 - value)
                     bounded.loc[unknown, "E"] = assignment[unknown]
                 elif name == "whole object correct":
                     bounded.loc[bounded.E.isna(), "E"] = assigned
@@ -298,7 +376,16 @@ def confusion(data, row_col, col_col, row_values, col_values):
     return out
 
 
-def evaluate(sample_path, allocation_path, labels_path, output_dir, human_path=None, bootstrap=4000):
+def evaluate(
+    sample_path,
+    allocation_path,
+    labels_path,
+    output_dir,
+    human_path=None,
+    bootstrap=4000,
+    inputs_path=None,
+    merge_path=None,
+):
     sample = pd.read_csv(sample_path).fillna({"ver_exists": "", "ver_kind": ""})
     allocation = pd.read_csv(allocation_path, sep="\t")
     labels = pd.read_csv(labels_path)
@@ -341,6 +428,19 @@ def evaluate(sample_path, allocation_path, labels_path, output_dir, human_path=N
     no_yandex.loc[yandex, ["E", "K"]] = np.nan
     no_yandex.loc[yandex, ["open", "is_vending"]] = "unclear"
     reports += metric_rows(no_yandex, "without_yandex", bootstrap)
+    # Labels whose only strong evidence is the Yandex card the pipeline also counted.
+    names = {}
+    if inputs_path and Path(inputs_path).exists():
+        names = pd.read_csv(inputs_path).set_index("unit_id")["name"].astype(str).to_dict()
+    pipeline_yandex = data.get("src_yandex", pd.Series(False, index=data.index)).astype(str).str.lower().eq("true")
+    yandex_card = pd.Series(
+        [rests_on_yandex_card(row, names.get(row["unit_id"], "")) for _, row in data.iterrows()], index=data.index
+    )
+    data["yandex_card_shared"] = yandex_card & pipeline_yandex
+    shared = data.copy()
+    shared.loc[data.yandex_card_shared, ["E", "K"]] = np.nan
+    shared.loc[data.yandex_card_shared, ["open", "is_vending"]] = "unclear"
+    reports += metric_rows(shared, "yandex_card_shared", bootstrap)
     existence_rows = []
     kind_rows = []
     city_counts = []
@@ -396,6 +496,21 @@ def evaluate(sample_path, allocation_path, labels_path, output_dir, human_path=N
                     )
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
+    flags = data[
+        ["unit_id", "category", "city", "stratum", "ver_exists", "exists", "open", "category_ok", "E", "K"]
+    ].copy()
+    flags["dependent"] = data.dependent
+    flags["yandex_only"] = yandex
+    flags["yandex_card_shared"] = data.yandex_card_shared
+    for column in ("exists_raw", "label_strength", "n_unreachable"):
+        if column in data:
+            flags[column] = data[column]
+    flags.to_csv(out / "label_flags.csv", index=False)
+    if merge_path and Path(merge_path).exists():
+        merges = pd.read_csv(merge_path, encoding="utf-8-sig")
+        low = merges[merges.low.astype(str).str.lower().eq("true")]
+        hit = data[data.unit_id.isin(low.unit_id)]
+        pd.crosstab([hit.category, hit.ver_exists], hit.exists, margins=True).to_csv(out / "osm_gis_merge_B.csv")
     pd.DataFrame(reports).to_csv(out / "metrics.csv", index=False)
     pd.DataFrame(existence_rows).to_csv(out / "confusion_existence.csv", index=False)
     pd.DataFrame(kind_rows).to_csv(out / "confusion_kind.csv", index=False)
@@ -542,6 +657,8 @@ def main():
         output,
         output / "human_check_B.xlsx",
         args.bootstrap,
+        output / f"auditor_input_{args.sample}.csv",
+        output / "diagnostics" / "osm_gis_merge.csv",
     )
 
 

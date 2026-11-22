@@ -13,6 +13,7 @@ import pandas as pd
 import yaml
 
 from infracheck.audit import evaluate
+from infracheck.audit.evaluate import variance_groups
 from infracheck.audit.grid_runner import run_point
 
 DIMENSIONS = {
@@ -59,22 +60,6 @@ def grid_points(category):
         set(p for p in candidates if sum(a != b for a, b in zip(p, current, strict=False)) <= 3),
         key=lambda p: (sum(a != b for a, b in zip(p, current, strict=False)), str(p)),
     )
-
-
-def variance_groups(data, allocation):
-    """Collapse singleton A design strata for variance, preserving point weights."""
-    mapping = {(r.delivery, r.stratum): r.stratum for r in allocation.itertuples()}
-    for r in allocation.itertuples():
-        if r.n_A_h == 1 and r.N_h > 1:
-            target = "S1" if r.stratum == "S2" and (r.delivery, "S1") in mapping else "S3"
-            if (r.delivery, target) not in mapping or target == r.stratum:
-                raise ValueError(f"Cannot collapse {r.delivery}/{r.stratum}")
-            mapping[(r.delivery, r.stratum)] = target
-    result = data.copy()
-    result["variance_stratum"] = [mapping[(d, s)] for d, s in zip(result.delivery, result.stratum, strict=False)]
-    alloc = allocation.copy()
-    alloc["variance_stratum"] = [mapping[(d, s)] for d, s in zip(alloc.delivery, alloc.stratum, strict=False)]
-    return result, alloc.groupby(["delivery", "variance_stratum"], as_index=False)[["N_h", "n_A_h"]].sum()
 
 
 def scores(data, allocation, bootstrap=1000, seed=20261121):

@@ -27,6 +27,7 @@ resources:
   yandex_cache:
     final: resources/cache/yandex/final_yandex_cache.jsonl
     v4: resources/cache/yandex/v4_yandex_cache.jsonl
+    nm: resources/cache/yandex/nm_yandex_cache.jsonl
 
 notify:
   telegram: false # see workflow/rules/notify.smk
@@ -318,6 +319,530 @@ categories:
       - {label: "Своя лицензия общепита в ЕГАИС (объектов)", count: "src_egais"}
       - {label: "Подтверждено, но Яндекс пишет «закрыт»", count: "confirmed.astype(bool) & ya_closed"}
       - {label: "Не запрошено, хотя вердикт зависит от Яндекса", count: "needs_yandex & (ya_status == '')"}
+
+  # ------------------------------------------------------------------------
+  # Medicine, grocery, education, sport: the other four classes of the same
+  # final delivery (N.A. Mitkin, 2026-11-24). The rule is catering's: two
+  # independent groups, strong and current, merged objects, «Вид?» from the
+  # export's own descriptor, Yandex's rubric and Overture's category. No
+  # ЕГАИС; Foursquare joins when its snapshot is in resources/. Medicine adds
+  # the export's own Roszdravnadzor flag (a name match against the licensee
+  # register, checks/register_flag.py) as one more group. Deliveries:
+  # config/deliveries_finalest_nm.tsv, overlay config/finalest_nm.yaml.
+  # ------------------------------------------------------------------------
+  medicine:
+    checks: [providers, register_flag, export_name, yandex, overture]
+    yandex_cache: nm
+    policy:
+      providers: *providers
+      register_flag:
+        column: register
+        source: roszdrav
+        label: "Росздравнадзор"
+        text: "название совпало с лицензиатом по адресу (отметка выгрузки)"
+      export_name: *export_name
+      yandex: &nm_yandex
+        near_m: 150.0
+        generic_m: 60.0
+        name_min: 72.0
+        contractor_status_found: "Найдено"
+        contractor_miss_text: "по адресу есть медорганизация, но с другим названием"
+        label: "Яндекс"
+        label_contractor_miss: "Яндекс (подрядчик)"
+      overture: *overture
+    existence:
+      min_sources: 2
+      count: &nm_count
+        identity: [strong]
+        record_state: [current]
+      never_count: [export]
+      groups:
+        - &g_osm {label: "OSM", column: src_osm, sources: [osm]}
+        - &g_gis {label: "2GIS", column: src_gis, sources: [2gis]}
+        - &g_ya {label: "Яндекс", column: src_yandex, sources: [yandex], checks: [yandex, yandex_contractor]}
+        - &g_ov {label: "Overture", column: src_overture, sources: [overture]}
+        - {label: "Росздравнадзор", column: src_register, sources: [roszdrav]}
+      exclude: &nm_exclude
+        - {source: overture, only: [foursquare], ignore: [overture], sep: "|"}
+    reasons: &nm_reasons
+      pro_sep: " | "
+      group_sep: "; "
+      con_intro: " || против/не найдено: "
+      con_sep: "; "
+      no_sources: "источников нет"
+      con_order: [yandex_contractor, yandex, overture]
+    query: &nm_query
+      group: "Яндекс"
+      column: needs_yandex
+      skip_checks: [yandex_contractor]
+    how: &nm_how
+      column: yandex_how
+      sep: "; "
+      parts:
+        - check: yandex_contractor
+          key: identity
+          texts: {strong: "подрядчик: имя совпало", weak: "подрядчик: только адрес+категория"}
+        - check: yandex
+          key: yandex_status
+          texts:
+            present: "наша проверка: есть"
+            closed: "наша проверка: закрыт"
+            ambiguous: "наша проверка: не опознан"
+            absent: "наша проверка: нет"
+            error: "наша проверка: ошибка"
+    derived: &nm_derived
+      ya_closed: "ya_status == 'closed'"
+    merge: &nm_merge
+      column: merged
+      pairs: [{check: relink, field: relink_object}]
+      shared_counted: [{check: overture, field: ref}]
+      disagree: "; у {n} склеенных объектов решение объекта отличается от решения хотя бы одной записи"
+    kind:
+      column: kind
+      reasons_column: kind_reasons
+      vote_identity: [strong]
+      votes: &nm_votes
+        - {scheme: ru_text, checks: [export_name], keep_empty: true}
+        - {scheme: yandex_rubric, label: "Яндекс, рубрика"}
+        - {scheme: overture_category}
+      words: &nm_words {"yes": "да", "no": "нет", vending: "автомат", conflict: "противоречие", none: "нет данных"}
+      schemes:
+        # ORDER IS THE RULE: first what is surely not a medical organisation
+        # although it sounds like one (veterinary, beauty, equipment trade),
+        # then medical words (optics and pharmacies included: the export's
+        # types), then shop / company words.
+        ru_text: &med_ladder
+          lower: true
+          ladder:
+            - ["no", 'ветеринар|зоомагазин|зоотовар|салон красоты|парикмахер|маникюр|ногтев|барбершоп|тату|солярий|медтехник|медицинской техники|медицинского оборудования|оптов|склад']
+            - - "yes"
+              - 'аптек|фармац|клиник|поликлиник|больниц|госпитал|медицин|медцентр|стоматолог|зубн|дантист|ортодонт|оптик|очки|контактных линз|офтальм|окулист|лаборатор|анализ|диагност|\bузи\b|\bмрт\b|рентген|фельдшер|\bфап\b|амбулатор|диспансер|травмпункт|скорой|скорая|переливания крови|роддом|родильн|перинатал|женская консультация|врач|доктор|педиатр|гинеколог|уролог|невролог|кардиолог|дерматолог|косметолог|терапевт|хирург|реабилитац|санатори|профилактори|центр здоровья|профилактики|инвитро|гемотест|хеликс|ситилаб|invitro|clinic|pharmacy|dental|medical|вита норд|аптечный огород|антей|здравсити|максавит|ригла|будь здоров|планета здоровья|ава фарм|айвита|смотрика|optic|счастливый взгляд|евростом|диамед|\bдент|дент-|\bапрель\b'
+            - - "no"
+              - 'магазин|маркет|компани|организаци|мастерская|студи|торговый дом|салон|офис|агентств|бюро|фирма|завод|производств|школа|детский сад|кафе|ресторан|\bбар\b|фитнес|спортивн|гостиниц|хостел|отель|сервис|банк'
+        yandex_rubric: *med_ladder
+        overture_category:
+          lower: false
+          ladder:
+            - ["no", 'veterinar|pet_|animal|beauty|hair|nail|barber|tattoo|massage|day_spa']
+            - - "yes"
+              - 'pharmac|drugstore|hospital|clinic|doctor|dentist|dental|orthodont|medical|health|optic|optometr|eye_|laborator|diagnost|physician|pediatric|surgeon|emergency|urgent_care|radiolog|maternity|rehabilitat|psychiatr|ambulance|blood'
+            - ["no", 'store|shop|restaurant|cafe|school|gym|fitness|bank|office|service|company|agency|hotel']
+    deliver:
+      suffix: "_подтверждено"
+      sheet: data
+      legend_sheet: "Подтверждение"
+      front:
+        - &f_conf {title: "Подтверждено", column: confirmed, width: 14}
+        - &f_reasons {title: "Основания", column: reasons, width: 70}
+        - {title: "Медицина?", column: kind, width: 14}
+      appended_width: 22
+      appended:
+        - ["Источников", n_sources]
+        - ["Источники", sources]
+        - ["Медицина: основания", kind_reasons]
+        - ["Росздравнадзор (выгрузка)", register_flag]
+        - &a_ya1 ["Яндекс: как засчитан", yandex_how]
+        - &a_ya2 ["Яндекс (наша): статус", ya_status]
+        - &a_ya3 ["Яндекс (наша): название", ya_name]
+        - &a_ya4 ["Яндекс (наша): адрес", ya_address]
+        - &a_ya5 ["Яндекс (наша): карточка", ya_url]
+        - &a_ya6 ["Яндекс (наша): расстояние, м", ya_distance_m]
+        - &a_ya7 ["Яндекс (наша): рядом", ya_nearby]
+        - &a_ya8 ["Яндекс (наша): запрос", ya_search_url]
+        - &a_ya9 ["Яндекс (наша): дата", ya_checked]
+        - &a_link ["Связанная запись", link_note]
+        - &a_ov1 ["Overture: название", ov_name]
+        - &a_ov2 ["Overture: источник", ov_dataset]
+        - &a_ov3 ["Overture: расстояние, м", ov_distance_m]
+        - &a_ov4 ["Overture: пояснение", ov_note]
+        - &a_e1 ["Объект №", entity]
+        - &a_e2 ["Строк у объекта", n_rows]
+        - &a_e3 ["Объект (склеен)", merged]
+        - &a_e4 ["Подтверждено (объект)", confirmed_object]
+      legend:
+        - &l_conf
+          - "Подтверждено"
+          - "1: о существовании объекта говорят не менее {min_sources_genitive} независимых источников; 0: меньше {min_sources_genitive}."
+        - &l_reasons
+          - "Основания"
+          - "По каждому засчитанному источнику указано, где найден объект: запись OSM или карточка 2GIS, карточка Яндекса с адресом и способом проверки, соседняя запись, давшая провайдера, место Overture. Источники разделены « | ». После « || против/не найдено:» указано, что искали и не нашли (куда смотреть при ручной проверке)."
+        - &l_object
+          - "Что такое объект"
+          - "Одна вывеска в одной точке (название и координата). Выгрузка повторяет объект под каждым подходящим типом, поэтому источники считаются по объекту, а вердикт пишется во все его строки. Если подрядчик записал одну вывеску дважды (запись OSM и запись 2GIS рядом с тем же именем, см. «Связанная запись»), обе записи считаются одним объектом: «Объект (склеен)» равен наименьшему «Объект №» среди них. Вердикт у каждой записи свой; «Подтверждено (объект)» объединяет свидетельства всех записей и используется в итогах (в скобках записи)."
+        - - "Источники"
+          - "OSM, 2GIS, Яндекс Карты, Overture Maps Places (Meta и AllThePlaces, без OSM), реестр лицензий Росздравнадзора по отметке выгрузки. Яндекс засчитывается один раз, как бы он ни был получен."
+        - &l_prov
+          - "OSM / 2GIS"
+          - "Флаги OSM и GIS листа data, объединённые по строкам объекта. Если у объекта нет провайдера, но в пределах {providers.relink_m:.0f} м ({providers.relink_generic_m:.0f} м для безымянной вывески) стоит запись другого провайдера с тем же именем, провайдер засчитывается: это пропущенная подрядчиком склейка, колонка «Связанная запись» называет эту запись."
+        - &l_yac
+          - "Яндекс: подрядчик"
+          - "«Найдено» подрядчика означает совпадение адреса и категории, а не объекта. Оно засчитывается, только если одно из имён в «Яндекс: название» совпадает с именем объекта (сходство не меньше {yandex.name_min:.0f})."
+        - &l_yao
+          - "Яндекс: наша проверка"
+          - "Запрос «название, город, адрес» с картой по координате объекта. Есть: организация с похожим именем в пределах {yandex.near_m:.0f} м ({yandex.generic_m:.0f} м для безымянной вывески). Закрыт: Яндекс пишет «Больше не работает», не засчитывается. Не опознан: по адресу кто-то есть, но по безымянной вывеске нельзя сказать кто. Пусто: объект не запрашивался, его вердикт не зависел от Яндекса."
+        - &l_ov
+          - "Overture"
+          - "Открытый слой мест Overture Maps (снимок релиза в resources/overture). Засчитывается место с похожим именем (сходство не меньше {overture.name_min:.0f}) в пределах {overture.near_m:.0f} м ({overture.generic_m:.0f} м для безымянной вывески) и уверенностью Overture не ниже {overture.conf_min}. Место Overture, собранное только из Foursquare, не засчитывается. Одна запись Overture подтверждает одну точку: если на неё претендуют несколько объектов, она достаётся ближайшему и объектам в пределах {overture.relink_m:.0f} м от него."
+        - - "Росздравнадзор"
+          - "Отметка выгрузки: 1, если название объекта совпало с лицензиатом реестра лицензий Росздравнадзора по этому адресу (импорт подрядчика 26.09.2026). Действует ли лицензия сейчас, отметка не проверяет."
+        - - "Медицина?"
+          - "Похож ли объект на медицинскую организацию, аптеку или оптику, по описаниям, которые не зависят от класса выгрузки: описание 2GIS после запятой в названии (или само название), рубрика Яндекса у той же карточки, категория Overture. да: все высказавшиеся источники за; нет: все против (ветеринария, салон красоты, магазин медтехники, компания); противоречие: источники расходятся; нет данных: по имени и источникам вид не определить. Это пометка для отбраковки, а не удаление: «нет» и «противоречие» стоит просмотреть, колонка «Медицина: основания» показывает, кто что сказал."
+        - &l_cant
+          - "Чего нельзя утверждать"
+          - "Подтверждено = 1 не означает, что объект работает сегодня и что он относится к этому типу. Подтверждено = 0 не означает, что объекта нет: это очередь для ручной проверки. Яндекс-проверка является снимком на дату в колонке."
+    combinations_title: "Источники объекта (комбинации):"
+    summary:
+      - &s1 {label: "Строк", value: rows}
+      - &s2 {label: "Объектов (уникальных вывесок в точке)", value: objects}
+      - &s3 {label: "Подтверждено объектов", value: confirmed_objects}
+      - &s4 {label: "Подтверждено строк", value: confirmed_rows}
+      - &s5 {label: "из них только OSM + 2GIS подрядчика", count: "osm & gis"}
+      - &s6
+        label: "добавлено склейкой соседних записей"
+        count: "confirmed.astype(bool) & ~(osm & gis) & (osm_link | gis_link)"
+      - &s7
+        label: "добавлено Яндексом"
+        count: "confirmed.astype(bool) & src_yandex & ((n_sources - src_yandex.astype(int)) < min_sources)"
+      - &s8 {label: "«Найдено» подрядчика, отклонено по имени (объектов)", count: "ya_contractor_raw & ~ya_contractor"}
+      - &s9 {label: "Наша Яндекс-проверка: запрошено объектов", count: "ya_status != ''"}
+      - &s10 {for: [present, closed, ambiguous, absent, error], label: "   {}", count: "ya_status == '{}'"}
+      - &s11 {label: "Найдено в Overture (объектов)", count: "ov_match"}
+      - {label: "Росздравнадзор по отметке выгрузки (объектов)", count: "src_register"}
+      - {for: ["да", "нет", "противоречие", "нет данных"], label: "Медицина? {} (объектов)", count: "kind == '{}'"}
+      - &s12 {label: "Подтверждено, но Яндекс пишет «закрыт»", count: "confirmed.astype(bool) & ya_closed"}
+      - &s13 {label: "Не запрошено, хотя вердикт зависит от Яндекса", count: "needs_yandex & (ya_status == '')"}
+
+  grocery:
+    checks: [providers, export_name, yandex, overture]
+    yandex_cache: nm
+    policy:
+      providers: *providers
+      export_name: *export_name
+      yandex:
+        near_m: 150.0
+        generic_m: 60.0
+        name_min: 72.0
+        contractor_status_found: "Найдено"
+        contractor_miss_text: "по адресу есть магазин, но с другим названием"
+        label: "Яндекс"
+        label_contractor_miss: "Яндекс (подрядчик)"
+      overture: *overture
+    existence:
+      min_sources: 2
+      count: *nm_count
+      never_count: [export]
+      groups: [*g_osm, *g_gis, *g_ya, *g_ov]
+      exclude: *nm_exclude
+    reasons: *nm_reasons
+    query: *nm_query
+    how: *nm_how
+    derived: *nm_derived
+    merge: *nm_merge
+    kind:
+      column: kind
+      reasons_column: kind_reasons
+      vote_identity: [strong]
+      votes: *nm_votes
+      words: *nm_words
+      schemes:
+        # First what is surely not a food shop although the export's class
+        # took it by a word (fuel, garages, traffic police, refuse sites,
+        # catering), then food-trade words (markets and shopping centres are
+        # the export's own types), then other shops and companies.
+        ru_text: &groc_ladder
+          lower: true
+          ladder:
+            - - "no"
+              - 'автосервис|шиномонтаж|автомойк|автозапчаст|запчаст|\bазс\b|заправк|автозаправ|\bдпс\b|вокзал|мусор|контейнерн|отход|аптек|парикмахер|салон красоты|ветеринар|кафе|ресторан|столовая|\bбар\b|паб\b|кофейн|пиццер|суши|шаурм|бургер|быстрого питания|рыбалк|рыболов|гостиниц|отель|сауна'
+            - - "yes"
+              - 'продукт|продовольств|супермаркет|гипермаркет|минимаркет|мини-маркет|универсам|гастроном|бакале|магнит|пят[её]рочк|перекр[её]ст|\bлента\b|дикси|вкусвилл|светофор|монетк|мяс|колбас|рыб|морепродукт|молок|молочн|сыр|овощ|фрукт|ягод|хлеб|пекарн|кулинари|кондитер|выпечк|чай|орех|сухофрукт|\bмёд|\bмед\b|рынок|ярмарк|торговый центр|торговый комплекс|торгово-развлекательный|\bтц\b|\bтрц\b|фермерск|низких цен|дискаунтер|универсальный магазин|магазин у дома|булочн|петровский|\bмакси\b|золотая нива|гарант|двинские традиции|каргополочка|тепличное|крендель|урожай|авоська|доброцен|дисма|чижик|grocery|supermarket|market|food'
+            - - "no"
+              - 'одежд|обув|мебел|строит|стройматериал|хозтовар|хозяйственн|электроник|бытовой техник|телефон|сотов|ювелир|книг|канцеляр|цвет|зоо|игрушк|спортивн|оптик|компани|организаци|офис|банк|склад|оптов|сервис|ремонт|мастерская|студи|салон|агентств|служба'
+        yandex_rubric: *groc_ladder
+        overture_category:
+          lower: false
+          ladder:
+            - ["no", 'restaurant|cafe|coffee_shop|\bbar\b|_bar|pub|fast_food|gas_station|auto|car_|parking|pharmac|clinic|beauty|hair']
+            - - "yes"
+              - 'grocery|supermarket|convenience|food|butcher|meat|seafood|fish|fruit|vegetable|produce|farmers_market|market|shopping_center|shopping_mall|dairy|cheese|deli|bakery|candy|confection|tea|coffee_roaster|specialty|organic|hypermarket'
+            - ["no", 'store|shop|clothing|furniture|hardware|electronics|bank|office|service|company|agency|school|gym']
+    deliver:
+      suffix: "_подтверждено"
+      sheet: data
+      legend_sheet: "Подтверждение"
+      front: [*f_conf, *f_reasons, {title: "Продукты?", column: kind, width: 14}]
+      appended_width: 22
+      appended:
+        - ["Источников", n_sources]
+        - ["Источники", sources]
+        - ["Продукты: основания", kind_reasons]
+        - *a_ya1
+        - *a_ya2
+        - *a_ya3
+        - *a_ya4
+        - *a_ya5
+        - *a_ya6
+        - *a_ya7
+        - *a_ya8
+        - *a_ya9
+        - *a_link
+        - *a_ov1
+        - *a_ov2
+        - *a_ov3
+        - *a_ov4
+        - *a_e1
+        - *a_e2
+        - *a_e3
+        - *a_e4
+      legend:
+        - *l_conf
+        - *l_reasons
+        - *l_object
+        - - "Источники"
+          - "OSM, 2GIS, Яндекс Карты, Overture Maps Places (Meta и AllThePlaces, без OSM). Открытого реестра продуктовых магазинов нет. Яндекс засчитывается один раз, как бы он ни был получен."
+        - *l_prov
+        - *l_yac
+        - *l_yao
+        - *l_ov
+        - - "Продукты?"
+          - "Торгует ли объект продуктами (магазин, рынок, ярмарка, торговый центр, павильон), по описаниям, которые не зависят от класса выгрузки: описание 2GIS после запятой в названии (или само название), рубрика Яндекса у той же карточки, категория Overture. да: все высказавшиеся источники за; нет: все против (АЗС, автосервис, пост ДПС, контейнерная площадка, общепит, непродовольственный магазин, компания); противоречие: источники расходятся; нет данных: по имени и источникам вид не определить. Это пометка для отбраковки, а не удаление: «нет» и «противоречие» стоит просмотреть, колонка «Продукты: основания» показывает, кто что сказал."
+        - *l_cant
+    combinations_title: "Источники объекта (комбинации):"
+    summary:
+      - *s1
+      - *s2
+      - *s3
+      - *s4
+      - *s5
+      - *s6
+      - *s7
+      - *s8
+      - *s9
+      - *s10
+      - *s11
+      - {for: ["да", "нет", "противоречие", "нет данных"], label: "Продукты? {} (объектов)", count: "kind == '{}'"}
+      - *s12
+      - *s13
+
+  education:
+    checks: [providers, export_name, yandex, overture]
+    yandex_cache: nm
+    policy:
+      providers: *providers
+      export_name: *export_name
+      yandex:
+        near_m: 150.0
+        generic_m: 60.0
+        name_min: 72.0
+        contractor_status_found: "Найдено"
+        contractor_miss_text: "по адресу есть образовательная организация, но с другим названием"
+        label: "Яндекс"
+        label_contractor_miss: "Яндекс (подрядчик)"
+      overture: *overture
+    existence:
+      min_sources: 2
+      count: *nm_count
+      never_count: [export]
+      groups: [*g_osm, *g_gis, *g_ya, *g_ov]
+      exclude: *nm_exclude
+    reasons: *nm_reasons
+    query: *nm_query
+    how: *nm_how
+    derived: *nm_derived
+    merge: *nm_merge
+    kind:
+      column: kind
+      reasons_column: kind_reasons
+      vote_identity: [strong]
+      votes: *nm_votes
+      words: *nm_words
+      schemes:
+        # First beauty trades (the export's extra-education class took beauty
+        # salons and their «schools»), then educational words, then shops,
+        # clinics and companies.
+        ru_text: &edu_ladder
+          lower: true
+          ladder:
+            - ["no", 'салон красоты|красоты|парикмахер|маникюр|ногтев|барбершоп|бров|ресниц|тату|солярий|массаж|спа-салон']
+            - - "yes"
+              - 'школ|гимнази|лице[йя]|детский сад|детсад|ясли|дошкольн|\bдоу\b|университет|институт|академи|колледж|техникум|училищ|кадетск|интернат|творчеств|дополнительного образования|допобразован|учебн|образоват|обучени|курсы|репетитор|развивающ|детский центр|детский клуб|языков|английск|english|робототехн|программирован|кружок|автошкол|музыкальн|художественн|хореограф|\bдши\b|юных техников|юных натуралистов|центр развития|детская студия|студия развития|детского развития|раннего развития|технопарк|шахмат|театральн|танцевальн|студия танцев|зарядка для ума|няня|education|school|university|college|kindergarten|academy'
+            - ["no", 'магазин|маркет|аптек|клиник|стоматолог|медицин|кафе|ресторан|столов|автосервис|офис|банк|компани|торговый дом|склад|оптов|гостиниц|фитнес|тренаж|сервис|ремонт|зоо|канц|оздоровительн|физкультурн']
+        yandex_rubric: *edu_ladder
+        overture_category:
+          lower: false
+          ladder:
+            - ["no", 'beauty|nail|hair|barber|cosmetolog|massage|day_spa']
+            - - "yes"
+              - 'school|college|university|kindergarten|preschool|child_care|day_care|education|academy|tutor|training|language|driving|campus'
+            - ["no", 'store|shop|restaurant|cafe|clinic|pharmac|bank|office|service|company|agency|hotel|gym|fitness']
+    deliver:
+      suffix: "_подтверждено"
+      sheet: data
+      legend_sheet: "Подтверждение"
+      front: [*f_conf, *f_reasons, {title: "Образование?", column: kind, width: 14}]
+      appended_width: 22
+      appended:
+        - ["Источников", n_sources]
+        - ["Источники", sources]
+        - ["Образование: основания", kind_reasons]
+        - *a_ya1
+        - *a_ya2
+        - *a_ya3
+        - *a_ya4
+        - *a_ya5
+        - *a_ya6
+        - *a_ya7
+        - *a_ya8
+        - *a_ya9
+        - *a_link
+        - *a_ov1
+        - *a_ov2
+        - *a_ov3
+        - *a_ov4
+        - *a_e1
+        - *a_e2
+        - *a_e3
+        - *a_e4
+      legend:
+        - *l_conf
+        - *l_reasons
+        - *l_object
+        - - "Источники"
+          - "OSM, 2GIS, Яндекс Карты, Overture Maps Places (Meta и AllThePlaces, без OSM). Реестр образовательных лицензий пока не подключён. Яндекс засчитывается один раз, как бы он ни был получен."
+        - *l_prov
+        - *l_yac
+        - *l_yao
+        - *l_ov
+        - - "Образование?"
+          - "Похож ли объект на образовательную организацию (школа, детский сад, вуз, колледж, учреждение дополнительного образования), по описаниям, которые не зависят от класса выгрузки: описание 2GIS после запятой в названии (или само название), рубрика Яндекса у той же карточки, категория Overture. да: все высказавшиеся источники за; нет: все против (салон красоты, магазин, клиника, компания); противоречие: источники расходятся; нет данных: по имени и источникам вид не определить. Это пометка для отбраковки, а не удаление: «нет» и «противоречие» стоит просмотреть, колонка «Образование: основания» показывает, кто что сказал."
+        - *l_cant
+    combinations_title: "Источники объекта (комбинации):"
+    summary:
+      - *s1
+      - *s2
+      - *s3
+      - *s4
+      - *s5
+      - *s6
+      - *s7
+      - *s8
+      - *s9
+      - *s10
+      - *s11
+      - {for: ["да", "нет", "противоречие", "нет данных"], label: "Образование? {} (объектов)", count: "kind == '{}'"}
+      - *s12
+      - *s13
+
+  sport:
+    checks: [providers, export_name, yandex, overture]
+    yandex_cache: nm
+    policy:
+      providers: *providers
+      export_name: *export_name
+      yandex:
+        near_m: 150.0
+        generic_m: 60.0
+        name_min: 72.0
+        contractor_status_found: "Найдено"
+        contractor_miss_text: "по адресу есть спортивный объект, но с другим названием"
+        label: "Яндекс"
+        label_contractor_miss: "Яндекс (подрядчик)"
+      overture: *overture
+    existence:
+      min_sources: 2
+      count: *nm_count
+      never_count: [export]
+      groups: [*g_osm, *g_gis, *g_ya, *g_ov]
+      exclude: *nm_exclude
+    reasons: *nm_reasons
+    query: *nm_query
+    how: *nm_how
+    derived: *nm_derived
+    merge: *nm_merge
+    kind:
+      column: kind
+      reasons_column: kind_reasons
+      vote_identity: [strong]
+      votes: *nm_votes
+      words: *nm_words
+      schemes:
+        # First garages, parking and the like (the export's «parks» class took
+        # «Park, автосервис»), then sport words (parks, squares and
+        # embankments are the export's own types of places for physical
+        # activity), then other shops and companies.
+        ru_text: &sport_ladder
+          lower: true
+          ladder:
+            - - "no"
+              - 'автосервис|шиномонтаж|автомойк|автозапчаст|запчаст|\bазс\b|заправк|парковк|стоянк|автопарк|мусор|контейнерн|парикмахер|салон красоты|маникюр|аптек|ветеринар|кафе|ресторан|столовая|\bбар\b|кальян|нотариус|юрист|аттракцион|бизнес-центр|деловой центр|платных услуг|детский дом|торговый центр|дилер|эвакуац|потолк|сварк|садов|комната ярости|кабинет|клиник|больниц'
+            - - "yes"
+              - 'спорт|фитнес|тренаж|бассейн|плаван|стадион|арена|каток|ледов|хоккей|футбол|баскетбол|волейбол|теннис|бадминтон|сквош|воркаут|workout|турник|площадк|йог|пилатес|единоборств|бокс|борьб|карате|дзюдо|самбо|тхэквондо|кикбоксинг|айкидо|фехтов|танц|скалодром|лыж|биатлон|гимнастик|акробат|кроссфит|crossfit|\bтир\b|стрелков|конный|верхов|велодорож|велосипед|роллердром|скейт|памптрек|физкульт|оздоровительн|\bфок\b|\bфск\b|дюсш|сдюсшор|\bгто\b|манеж|коробк|\bкорт|олимп|палестра|сквер|парк|бульвар|набережн|gym|fitness|sport|pool|stadium'
+            - ["no", 'одежд|обув|мебел|строит|стройматериал|электроник|ювелир|продукт|супермаркет|клиник|медицин|компани|организаци|офис|склад|оптов|сервис|ремонт|мастерская|салон|музыкальн|гостиниц|магазин']
+        yandex_rubric: *sport_ladder
+        overture_category:
+          lower: false
+          ladder:
+            - ["no", 'auto|car_|parking|gas_station|restaurant|cafe|\bbar\b|_bar|pub|beauty|hair|nail|pharmac|clinic']
+            - - "yes"
+              - 'gym|fitness|sport|stadium|arena|swimming|pool|ice_rink|skating|park|playground|tennis|yoga|pilates|martial_arts|boxing|dance|climbing|golf|ski|recreation|athletic|trail|bicycle|soccer|football|hockey|basketball|volleyball|bowling'
+            - ["no", 'store|shop|office|service|company|agency|bank|hotel|school']
+    deliver:
+      suffix: "_подтверждено"
+      sheet: data
+      legend_sheet: "Подтверждение"
+      front: [*f_conf, *f_reasons, {title: "Спорт?", column: kind, width: 14}]
+      appended_width: 22
+      appended:
+        - ["Источников", n_sources]
+        - ["Источники", sources]
+        - ["Спорт: основания", kind_reasons]
+        - *a_ya1
+        - *a_ya2
+        - *a_ya3
+        - *a_ya4
+        - *a_ya5
+        - *a_ya6
+        - *a_ya7
+        - *a_ya8
+        - *a_ya9
+        - *a_link
+        - *a_ov1
+        - *a_ov2
+        - *a_ov3
+        - *a_ov4
+        - *a_e1
+        - *a_e2
+        - *a_e3
+        - *a_e4
+      legend:
+        - *l_conf
+        - *l_reasons
+        - *l_object
+        - - "Источники"
+          - "OSM, 2GIS, Яндекс Карты, Overture Maps Places (Meta и AllThePlaces, без OSM). Реестр спортивных объектов (ВРОС) пока не подключён. Скверы, воркауты, площадки, коробки и велодорожки знает в основном OSM, поэтому у них часто один источник: это не признак отсутствия. Яндекс засчитывается один раз, как бы он ни был получен."
+        - *l_prov
+        - *l_yac
+        - *l_yao
+        - *l_ov
+        - - "Спорт?"
+          - "Похож ли объект на спортивный объект или место для физической активности (зал, бассейн, стадион, каток, площадка, сквер, парк), по описаниям, которые не зависят от класса выгрузки: описание 2GIS после запятой в названии (или само название), рубрика Яндекса у той же карточки, категория Overture. да: все высказавшиеся источники за; нет: все против (автосервис, парковка, общепит, магазин не спортивных товаров, компания); противоречие: источники расходятся; нет данных: по имени и источникам вид не определить. Это пометка для отбраковки, а не удаление: «нет» и «противоречие» стоит просмотреть, колонка «Спорт: основания» показывает, кто что сказал."
+        - *l_cant
+    combinations_title: "Источники объекта (комбинации):"
+    summary:
+      - *s1
+      - *s2
+      - *s3
+      - *s4
+      - *s5
+      - *s6
+      - *s7
+      - *s8
+      - *s9
+      - *s10
+      - *s11
+      - {for: ["да", "нет", "противоречие", "нет данных"], label: "Спорт? {} (объектов)", count: "kind == '{}'"}
+      - *s12
+      - *s13
 
   # ------------------------------------------------------------------------
   # Alcohol (off-trade shops and on-trade bars / catering). Until the final

@@ -136,6 +136,10 @@ def wide(ev: pd.DataFrame, index: pd.Index | None = None) -> pd.DataFrame:
     ids = index if index is not None else pd.Index(ev["object_id"].unique(), name="object_id")
     out = pd.DataFrame(index=ids)
     out.index.name = "object_id"
+    # A delivery with no relink (or no provider) row at all has no such
+    # extra column in its Evidence (Novodvinsk sport: no OSM/2GIS pair).
+    ev = ev.reindex(columns=ev.columns.union(["relink_from", "relink_note", "providers_urls"],
+                                             sort=False))
     prov = ev[ev["check"] == "providers"]
     link = ev[ev["check"] == "relink"]
     for flag, (_, source) in PROVIDERS.items():

@@ -23,6 +23,11 @@ from infracheck.core.names import is_generic
 DATA_SHEET = "data"
 STATUS_FOUND = "Найдено"
 
+# Register flags some workbooks carry (medicine: Roszdravnadzor). Each becomes
+# the boolean object column `register` (any row flagged) only when the sheet
+# has it, so the workbooks without one keep their ObjectTable unchanged.
+REGISTER_FLAGS = ["Росздравнадзор"]
+
 # Columns of the ObjectTable beyond the contract, produced here.
 ADAPTER_COLUMNS = ["entity", "types", "osm", "gis", "arkh_admin", "osm_urls", "gis_urls",
                    "yandex_region", "yandex_contractor_rows"]
@@ -54,21 +59,57 @@ def read_rows(path: Path) -> pd.DataFrame:
     orig = pd.read_excel(path, sheet_name="original_data")
     qual = pd.read_excel(path, sheet_name="quality")
     key = ["type_orig", "name_orig", "adress_orig", "latitude", "longitude"]
-    if len(orig) != len(df) or orig.duplicated(key).any() or qual.duplicated(key).any():
-        raise RuntimeError(f"{path.name}: original_data/quality cannot be keyed to data")
-    ids = orig[key].merge(qual[key + ["providers", "matched_source_ids"]], on=key,
-                          how="left", validate="1:1")
-    prov = ids["providers"].fillna("")
-    if not ((prov.str.contains("osm") == df["OSM"].eq(1))
-            & (prov.str.contains("2gis") == df["GIS"].eq(1))).all():
-        raise RuntimeError(f"{path.name}: quality providers disagree with data OSM/GIS")
-    df["_ids"] = ids["matched_source_ids"].fillna("").to_numpy()
+    ids_cols = ["providers", "matched_source_ids"]
+    if len(orig) != len(df) and "dedup_audit" in pd.ExcelFile(path).sheet_names:
+        df["_ids"] = _ids_after_contractor_dedup(path, df, qual)
+    else:
+        # Rows sharing the whole key are one object recorded twice by one
+        # provider (Arkhangelsk sport: «Детский парк» is an OSM way and an OSM
+        # relation): with the same providers their ids are pooled; a key
+        # shared by rows of different providers stays ambiguous.
+        qual_u = qual
+        if qual.duplicated(key).any():
+            g = qual.fillna({"providers": ""}).groupby(key, dropna=False, sort=False)
+            if (g["providers"].nunique() > 1).any():
+                raise RuntimeError(f"{path.name}: original_data/quality cannot be keyed to data")
+            qual_u = g.agg(providers=("providers", "first"), matched_source_ids=(
+                "matched_source_ids", lambda s: "; ".join(dict.fromkeys(s.dropna().astype(str))))).reset_index()
+        if len(orig) != len(df):
+            raise RuntimeError(f"{path.name}: original_data/quality cannot be keyed to data")
+        ids = orig[key].merge(qual_u[key + ids_cols], on=key, how="left",
+                              validate="1:1" if len(qual_u) == len(qual) else "m:1")
+        prov = ids["providers"].fillna("")
+        if not ((prov.str.contains("osm") == df["OSM"].eq(1))
+                & (prov.str.contains("2gis") == df["GIS"].eq(1))).all():
+            raise RuntimeError(f"{path.name}: quality providers disagree with data OSM/GIS")
+        df["_ids"] = ids["matched_source_ids"].fillna("").to_numpy()
     df["_name"] = df["name"].fillna("").astype(str).str.strip()
     df["_addr"] = df["address"].fillna("").astype(str).str.strip()
     key = entities.entity_key(df["city"], df["_name"], df["latitude"], df["longitude"])
     df["entity"] = entities.entity_ids(key)
     df["site_key"] = key
     return df
+
+
+def _ids_after_contractor_dedup(path: Path, df: pd.DataFrame, qual: pd.DataFrame) -> np.ndarray:
+    """Source ids for a workbook whose `data` the contractor deduplicated.
+
+    The «enriched» Arkhangelsk education workbook merged rows of `data`
+    (sheet `dedup_audit`, «same_category_and_full_address») but kept
+    `original_data` and `quality` whole, so neither is row-aligned with
+    `data` any more and the audit's row numbers do not index them.  Each
+    `data` row takes the ids of the `quality` row with its own type, name and
+    coordinate when exactly one matches; a merged row whose name or point the
+    contractor rewrote gets none.  The ids only feed the OSM / 2GIS links of
+    «Основания»; the OSM and GIS flags are read from `data` as always.
+    """
+    left = df[["type", "name", "latitude", "longitude"]].reset_index()
+    right = (qual.rename(columns={"type_orig": "type", "name_orig": "name"})
+             [["type", "name", "latitude", "longitude", "matched_source_ids"]])
+    right = right.drop_duplicates(["type", "name", "latitude", "longitude"], keep=False)
+    m = left.merge(right, on=["type", "name", "latitude", "longitude"], how="left",
+                   validate="m:1").set_index("index").reindex(df.index)
+    return m["matched_source_ids"].fillna("").to_numpy()
 
 
 def _links(s: pd.Series, which: int) -> str:
@@ -174,6 +215,11 @@ def to_objects(df: pd.DataFrame, delivery: str, yandex_region: str,
     cols = list(objects.COLUMNS) + ADAPTER_COLUMNS
     if risk_layer:
         cols += ["risk", "trade", "evidence", "brand_learn"]
+    flag = next((c for c in REGISTER_FLAGS if c in df), None)
+    if flag is not None:
+        hit = pd.to_numeric(df[flag], errors="coerce").fillna(0).eq(1)
+        ob["register"] = hit.groupby(df["entity"]).any().reindex(ob["entity"]).to_numpy()
+        cols += ["register"]
     ob = ob[cols].astype({c: t for c, t in objects.COLUMNS.items() if c != "category"} | {"category": "string"})
     rowmap = pd.DataFrame({"object_id": [entities.object_id(delivery, e) for e in df["entity"]],
                            "entity": df["entity"].to_numpy()},

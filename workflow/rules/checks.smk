@@ -29,6 +29,16 @@ use rule check_providers as check_arkh_admin with:
         policy=policy_cfg("arkh_admin"),
 
 
+use rule check_providers as check_register_flag with:
+    output:
+        "<temp>/{delivery}/evidence/register_flag.parquet",
+    log:
+        "<logs>/check_register_flag/{delivery}.log",
+    params:
+        check="register_flag",
+        policy=policy_cfg("register_flag"),
+
+
 use rule check_providers as check_export_name with:
     output:
         "<temp>/{delivery}/evidence/export_name.parquet",

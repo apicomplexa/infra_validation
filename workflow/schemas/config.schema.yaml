@@ -102,7 +102,7 @@ $defs:
         type: array
         items:
           type: string
-          enum: [providers, arkh_admin, export_name, yandex, overture, foursquare, egais]
+          enum: [providers, arkh_admin, register_flag, export_name, yandex, overture, foursquare, egais]
         uniqueItems: true
       yandex_cache: {type: string}
       policy:
@@ -119,6 +119,10 @@ $defs:
           arkh_admin:
             type: object
             properties: {label: {type: string}, text: {type: string}}
+            additionalProperties: false
+          register_flag:
+            type: object
+            properties: {column: {type: string}, source: {type: string}, label: {type: string}, text: {type: string}}
             additionalProperties: false
           export_name:
             type: object

@@ -1,0 +1,8 @@
+# Overlay on config/config.yaml for the four classes of the final delivery
+# checked by N.A. Mitkin (medicine, grocery, education, sport); run from the
+# repository root: snakemake --configfile config/finalest_nm.yaml -- all
+deliveries: config/deliveries_finalest_nm.tsv
+
+pathvars:
+  results: results/finalest_nm
+  logs: logs/finalest_nm

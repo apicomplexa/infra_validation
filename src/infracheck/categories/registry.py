@@ -29,6 +29,7 @@ from infracheck.core import evidence
 MODULES = {
     "providers": "infracheck.checks.providers",
     "arkh_admin": "infracheck.checks.arkh_admin",
+    "register_flag": "infracheck.checks.register_flag",
     "export_name": "infracheck.checks.export_name",
     "yandex": "infracheck.checks.yandex",
     "overture": "infracheck.checks.overture",

@@ -78,6 +78,21 @@ def workbook(sheet: pd.DataFrame, name: str) -> openpyxl.Workbook:
     return wb
 
 
+def _as_pandas_reads(header: list) -> list:
+    """The header as `pd.read_excel` names it: a repeated title gets ".1", ".2"...
+
+    The Arkhangelsk sport workbook has «Яндекс: найдено» twice; any other
+    header is returned unchanged.
+    """
+    seen: dict = {}
+    out = []
+    for h in header:
+        n = seen.get(h, 0)
+        out.append(h if n == 0 else f"{h}.{n}")
+        seen[h] = n + 1
+    return out
+
+
 def write(src: Path | str, dst: Path | str, rows: pd.DataFrame, columns: list[str],
           summary: list[tuple[str, object]], legend_rows: list[tuple[str, str]], layout: Mapping) -> None:
     """Copy `src` to `dst` with the front columns, the appended evidence and the legend.
@@ -93,7 +108,7 @@ def write(src: Path | str, dst: Path | str, rows: pd.DataFrame, columns: list[st
     front, appended = layout["front"], layout["appended"]
     wb = openpyxl.load_workbook(src) if src.suffix.lower() == ".xlsx" else workbook(rows[columns], layout["sheet"])
     ws = wb[layout["sheet"]]
-    header = [c.value for c in ws[1]]
+    header = _as_pandas_reads([c.value for c in ws[1]])
     if header != list(columns):
         raise RuntimeError(f"{src.name}: header changed between reads")
     if ws.max_row - 1 != len(rows):

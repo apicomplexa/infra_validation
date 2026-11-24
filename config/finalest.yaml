@@ -8,12 +8,44 @@ pathvars:
 # The existing risk-layer matching rules, with all delivered city prefixes
 # recognised by the address parser. Each city's two risk layers form one
 # match group; registry.run filters the register to that group's city.
+#
+# Yandex: four opt-in rules taken over from the medicine/grocery/education/
+# sport classes (docs/changes/2026-11-24-nm-yandex-all.md), set here and not in
+# config/config.yaml so the archive deliveries (final, v4) keep their golden
+# parity. What they moved on this delivery:
+# docs/changes/2026-11-24-finalest-yandex-rules.md.
 categories:
+  catering:
+    policy:
+      yandex: &finalest_yandex
+        # Our query reading the contractor's own card «Больше не работает»
+        # withdraws his October hit on it (he never read closures).
+        closed_overrides_contractor: true
+        # One card confirms one site: the nearest claimant and those within
+        # 50 m of it, as for Overture.
+        exclusive_m: 50.0
+        # An address without a house number («Остановка», «Микрорайон
+        # Соломбала»): a second query «название, город» when the first does not
+        # find the place open. Read only once `yandex-fetch` has cached it.
+        fallback_vague_address: true
+        # Switch, off: 60 counts an open card of the same name within 60 m as
+        # the place where the nearest alike card is closed (re-registered).
+        prefer_open_m: 0.0
+    # Closure check: every named object goes to the Yandex queue, not only the
+    # ones the query could still decide. The verdict rule is unchanged.
+    query:
+      all: true
   alcohol:
     policy:
+      yandex: *finalest_yandex
       egais:
         home_cities: [Архангельск, Новодвинск, Северодвинск]
+    query:
+      all: true
   tobacco:
     policy:
+      yandex: *finalest_yandex
       egais:
         home_cities: [Архангельск, Новодвинск, Северодвинск]
+    query:
+      all: true

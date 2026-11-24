@@ -25,6 +25,12 @@ is exported for documentation, never deployed).
 - `pixi run yandex-fetch` — the one network step (appends to the Yandex cache);
   never part of `all`. Do not run it without the user's go-ahead.
 - `pixi run docs` — render `docs/architecture.qmd` to `results/docs/`
+- `pixi run unified-base` — `workflow/scripts/unified_base.py` on a finished run
+  (default `results/finalest_nm`; extra args override `--run`, `--deliveries`, `--stamp`)
+- `config/finalest.yaml` switches on the Yandex rules `closed_overrides_contractor`,
+  `exclusive_m`, `fallback_vague_address` and `query.all` for catering, alcohol and
+  tobacco (`prefer_open_m` is a switch, off); `config.yaml` alone keeps the archive
+  rule for the golden tests. See `docs/changes/2026-11-24-finalest-yandex-rules.md`.
 
 ## Layers and their rules
 

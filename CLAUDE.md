@@ -70,3 +70,46 @@ is exported for documentation, never deployed).
 - v4 CSVs: semicolon, UTF-8 with BOM; `site_key` is the coordinate alone.
 - The FSRAR registry is streamed out of its ZIP, never loaded whole; the
   workflow cuts it to the cities of `deliveries.tsv` (`data/temp/egais/registry.tsv`).
+
+## Four more categories: medicine, grocery, education, sport (`finalest_nm`)
+
+Added by N. Mitkin's sessions on 2026-11-24 for the same final delivery of
+Muslim (12 workbooks: 3 cities × 4 classes). Read before touching them:
+`docs/changes/2026-11-24-nm-categories.md` (blocks, register flag, unified base)
+and `docs/changes/2026-11-24-nm-yandex-all.md` (Yandex query for every object and
+the matching rules found by checking against the supervisor's manual review).
+
+- Config: blocks `categories.medicine|grocery|education|sport` in `config/config.yaml`
+  (anchors `&nm_*`); deliveries `config/deliveries_finalest_nm.tsv`; overlay
+  `config/finalest_nm.yaml` (results `results/finalest_nm/`, logs `logs/finalest_nm/`);
+  Yandex cache `resources/cache/yandex/nm_yandex_cache.jsonl` (not in git: Yandex
+  terms; back it up, never commit it).
+- **Invariant:** everything these categories need beyond the archive's rule is an
+  opt-in field of a check's `Policy` (default = old behaviour) or a config key the
+  other categories do not set. Catering, alcohol and tobacco must not move; a change
+  to shared code needs proof (unit tests plus a same-output check with their policies).
+- Opt-in fields used here (`checks/yandex.py`): `contain_m`, `numbers`,
+  `paused_is_closed`, `fallback_vague_address`, `prefer_open_m`, `exclusive_m`,
+  `closed_overrides_contractor`, `address_kind`, `address_loose_m`; `query.all`
+  (`categories/base.py`); `merge.shared_counted` on our Yandex card. Helpers:
+  `core/names.py` (`contains_words`, `number_agreement`, `trade_kind`, `has_kind`),
+  `core/address.py` (`address_key`, `same_address`, `same_building`).
+- Snakemake does not track `src/` as a rule input: after editing `src/infracheck`
+  without touching the config, rerun with `--forceall` (offline, ~30 s), or the old
+  evidence stays. To see what a matching change moved, copy
+  `data/temp/<delivery>/evidence/yandex.parquet` aside first and diff the statuses
+  per object; every moved object gets read by a human before the change is kept.
+- Never: let a match made by a lifted rule (number, containment, address) close an
+  object; count the contractor's «Найдено» when our query read that card closed.
+- `workflow/scripts/unified_base.py` — one row per merged object across deliveries,
+  supervisor's flag names (`OSM`, `GIS`, `yandex`, ...), «В базу», «Почему не в базе»,
+  «Что проверить вручную»; the name comes from the OSM record (the fascia), the
+  other record names go to «Другие названия»; `--books DIR --stamp YYMMDD` writes one workbook per
+  category (sheets База, Все объекты, На ручную проверку sorted by address, Этапы,
+  Возможные дубли, Переменные). Works for any category.
+- Windows without WSL: Docker Desktop, image `ghcr.io/prefix-dev/pixi:latest`, pixi
+  env in volume `infra_pixi` mounted at `/work/.pixi`:
+  `docker run --rm -v "<repo>:/work" -v infra_pixi:/work/.pixi -w /work ghcr.io/prefix-dev/pixi:latest bash -c "pixi run snakemake --cores 8 --configfile config/finalest_nm.yaml -- all"`;
+  the network step: `... --cores 1 --configfile config/finalest_nm.yaml --forcerun yandex_fetch -- yandex_fetch`.
+- Data in `data/cleaned/` of the parent project and every output carrying 2GIS or
+  Yandex rows must not be published (licences not confirmed).

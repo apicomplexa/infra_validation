@@ -59,9 +59,19 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from infracheck.checks import _directory as D
 from infracheck.core import entities, evidence
+from infracheck.core.address import same_address, same_building
 from infracheck.core.geo import haversine_m
-from infracheck.core.names import is_generic_directory, name_similarity, similar
+from infracheck.core.names import (
+    contains_words,
+    has_kind,
+    is_generic_directory,
+    name_similarity,
+    number_agreement,
+    similar,
+    trade_kind,
+)
 
 HOME_CITY = "Архангельск"
 DEFAULT_REGION = "20/arkhangelsk"
@@ -114,6 +124,49 @@ class Policy:
     near_m: float = 150.0
     generic_m: float = 60.0
     name_min: float = 72.0
+    # Opt-in (0 = off): within this many metres a directory name that contains
+    # every word of the export's fascia is the same business written in full
+    # (`names.contains_words`); for the contractor's address hit, distance is
+    # the address itself.  Medicine only: in retail «Магнит» ⊂ «Магнит Косметик».
+    contain_m: float = 0.0
+    # Opt-in: institution numbers decide (`names.number_agreement`): «No101» is
+    # «№ 101», and «№ 34» is never «№ 43» however alike the rest reads.
+    numbers: bool = False
+    # «Временно не работает» is closed by default (archive parity); a category
+    # may count it as present -- the place exists, it is shut for a while.
+    paused_is_closed: bool = True
+    # Opt-in: where the export's address has no house number («Остановка»,
+    # «Микрорайон Соломбала» -- the contractor's reverse geocoder named the
+    # spot, not a building), a second query «название, город» with the same
+    # viewport is read when the first finds nothing.  Probe 2026-11-24: 3 of
+    # 20 such misses found; dropping the address outright lost 2 of 3 closures.
+    fallback_vague_address: bool = False
+    # Opt-in (0 = off): where the nearest alike-named card is closed but an open
+    # one of the same name stands within this many metres, the place is open
+    # (a business re-registered: «ТЦ Магнит» closed at 37 m, open at 52 m).
+    # Farther, the open card is another branch and the closure stands.
+    prefer_open_m: float = 0.0
+    # Opt-in (0 = off): one card confirms one site -- the nearest object and the
+    # objects within this many metres of it (`_directory.exclusive`, as for
+    # Overture); farther claimants lose it («Бристоль» at Воскресенская 107 and
+    # 118 both matched the card at 105).
+    exclusive_m: float = 0.0
+    # Opt-in: our own query finding the contractor's card closed withdraws the
+    # contractor's October hit on that same card (it never read closures).
+    closed_overrides_contractor: bool = False
+    # Opt-in: a typical name («Взрослая поликлиника», «Магазин готовых очков»,
+    # `names.trade_kind`) is the card at the very same house (`address.same_address`)
+    # whose name mentions that trade («Первая ГБ им. Волосевича, поликлиника»,
+    # ул. Гайдара, 3).  A brand name («Фармомед») is never matched by address:
+    # another pharmacy at that door is another pharmacy.  Confirms, never closes.
+    # A public medical institution named by place counts as typical here
+    # («Исакогорская подстанция скорой медицинской помощи», `trade_kind(public_places)`),
+    # and a number disagreement («Аптека № 2» / «Аптека № 5») is never overridden.
+    address_kind: bool = False
+    # Opt-in, with `address_kind`: within this many metres the house may differ by
+    # a korpus named on one side only («Красина, 3к1» / «улица Красина, 3»,
+    # `address.same_building`), and a card without an address is taken by its trade.
+    address_loose_m: float = 0.0
     contractor_status_found: str = "Найдено"
     contractor_miss_text: str = "по адресу есть общепит, но с другим названием"
     label: str = "Яндекс"
@@ -364,7 +417,7 @@ def _score(cand: Candidate, name: str, lat: float, lon: float) -> tuple[float, f
 
 
 def judge(answer: Answer, name: str, lat: float, lon: float, *,
-          generic: bool | None = None, policy: Policy = DEFAULT) -> dict:
+          generic: bool | None = None, policy: Policy = DEFAULT, address: str = "") -> dict:
     """Decide what the page says about *this* object.
 
     A candidate is taken only when it is both near enough and named alike; a
@@ -382,13 +435,44 @@ def judge(answer: Answer, name: str, lat: float, lon: float, *,
     nameless fascias -- "Столовая" is generic in catering, "Продукты" in retail.
     """
     orgs = [c for c in answer.candidates if not is_toponym(c)]
-    scored = [(*_score(c, name, lat, lon), c) for c in orgs]
+    trade = trade_kind(name, public_places=True) if policy.address_kind and address else ""
+    # (metres, effective similarity, candidate, lifted): `lifted` marks a match
+    # made by the number, containment or address rule rather than by the names alone.
+    scored = []
+    for c in orgs:
+        d, sim = _score(c, name, lat, lon)
+        eff, lifted = sim, False
+        if policy.numbers:
+            agree = number_agreement(name, c.name)
+            if agree is False:
+                eff = 0.0
+            elif agree and sim < policy.name_min:
+                eff, lifted = policy.name_min, True
+        if (eff < policy.name_min and policy.contain_m > 0 and d <= policy.contain_m
+                and contains_words(name, c.name)
+                and not (policy.numbers and number_agreement(name, c.name) is False)):
+            eff, lifted = policy.name_min, True
+        if (eff < policy.name_min and trade and d <= policy.near_m and has_kind(trade, c.name)
+                and not (policy.numbers and number_agreement(name, c.name) is False)
+                and (same_address(address, c.address)
+                     or (policy.address_loose_m > 0 and d <= policy.address_loose_m
+                         and (same_building(address, c.address) or not (c.address or "").strip())))):
+            eff, lifted = policy.name_min, True
+        scored.append((d, eff, c, lifted))
     scored.sort(key=lambda t: (t[0], -t[1]))
     if generic is None:
         generic = is_generic_directory(name)
     limit = policy.generic_m if generic else policy.near_m
 
-    best = next((t for t in scored if t[0] <= limit and t[1] >= policy.name_min), None)
+    def shut(c: Candidate) -> bool:
+        return c.closed or (c.paused and policy.paused_is_closed)
+
+    # A lifted match may confirm a place but never close one: «Поликлиника № 2,
+    # женская консультация № 6» closed is a department, not the polyclinic.
+    matches = [t for t in scored if t[0] <= limit and t[1] >= policy.name_min and not (t[3] and shut(t[2]))]
+    best = matches[0] if matches else None
+    if best is not None and shut(best[2]) and policy.prefer_open_m > 0:
+        best = next((t for t in matches if not shut(t[2]) and t[0] <= policy.prefer_open_m), best)
     if best is None:
         near = scored[0] if scored and scored[0][0] <= policy.near_m else None
         occupied = near is not None and near[0] <= policy.generic_m
@@ -400,23 +484,30 @@ def judge(answer: Answer, name: str, lat: float, lon: float, *,
                               if near else ""),
             "address_found": occupied or "/house/" in answer.canonical,
         }
-    d, sim, c = best
+    d, sim, c, _ = best
     return {
-        "status": STATUS_CLOSED if (c.closed or c.paused) else STATUS_PRESENT,
+        "status": STATUS_CLOSED if shut(c) else STATUS_PRESENT,
         "yandex_name": c.name, "yandex_address": c.address, "yandex_url": c.url,
         "yandex_distance_m": round(d, 1), "yandex_name_sim": round(sim, 1),
-        "yandex_nearby": "", "address_found": True,
+        "yandex_nearby": "", "address_found": True, "yandex_paused": bool(c.paused and not c.closed),
     }
 
 
+def _numbered(name: str, other: str, sim: float, floor: float) -> float:
+    """`sim` corrected by the institution-number rule (see `names.number_agreement`):
+    0 where the numbers differ, at least `floor` where kind and number agree."""
+    agree = number_agreement(name, other)
+    return 0.0 if agree is False else max(sim, floor) if agree else sim
+
+
 def verdict(rec: dict, name: str, lat: float, lon: float, *,
-            generic: bool | None = None, policy: Policy = DEFAULT) -> dict:
+            generic: bool | None = None, policy: Policy = DEFAULT, address: str = "") -> dict:
     """Judge one cached answer.  Costs nothing, so thresholds stay movable."""
     if rec.get("note"):
         return {"status": STATUS_ERROR, "yandex_name": "", "yandex_address": "",
                 "yandex_url": "", "yandex_distance_m": "", "yandex_name_sim": "",
                 "yandex_nearby": "", "address_found": False}
-    return judge(Answer.from_dict(rec), name, lat, lon, generic=generic, policy=policy)
+    return judge(Answer.from_dict(rec), name, lat, lon, generic=generic, policy=policy, address=address)
 
 
 def rubric(rec: dict | None, url: str) -> str:
@@ -453,7 +544,14 @@ def rejudge_contractor(rows_json: str, name: str, policy: Policy = DEFAULT) -> d
         out["raw"] = True
         cands = [n.strip() for n in str(names_s).split(";") if n.strip() and n.strip() != "nan"]
         scored = [(similar(name, n), n) for n in cands]
+        if policy.numbers:
+            scored = [(_numbered(name, n, s, policy.name_min), n) for s, n in scored]
         sim, best = max(scored, default=(0.0, ""))
+        if sim < policy.name_min and policy.contain_m > 0:
+            ok = [n for n in cands if contains_words(name, n)
+                  and not (policy.numbers and number_agreement(name, n) is False)]
+            if ok:
+                best, sim = ok[0], policy.name_min
         sims.append(sim)
         if sim >= policy.name_min:
             names.append(best)
@@ -474,8 +572,9 @@ def _own_clause(v: dict, checked: str, search: str) -> tuple[str, str]:
     """(identity/state key, text) of our own verdict: the body of the clause."""
     status = v["status"]
     if status == STATUS_PRESENT:
+        paused = " — «Временно не работает»" if v.get("yandex_paused") else ""
         return "present", (f"карточка «{v['yandex_name']}», {v['yandex_address']}, {v['yandex_distance_m']} м"
-                           f" (наша проверка {checked}; {v['yandex_url'] or search})")
+                           f"{paused} (наша проверка {checked}; {v['yandex_url'] or search})")
     if status == STATUS_CLOSED:
         return "closed", f"«{v['yandex_name']}» — «Больше не работает»"
     if status == STATUS_ABSENT:
@@ -497,6 +596,51 @@ def own_query(r: pd.Series) -> str:
     """The search URL an object's own name and address make (the cache key)."""
     return search_url(r["name"], r["address"], float(r["lat"]), float(r["lon"]), r["city"],
                       r.get("yandex_region") or DEFAULT_REGION)
+
+
+def vague_address(address) -> bool:
+    """An address without a house number: the contractor's geocoder named a place, not a door.
+
+    The export writes «улица, дом»; a number inside the street's own name
+    («Посёлок 26-го Лесозавода», «3-й Пятилетки») is not a house number.
+    """
+    a = "" if address is None or (isinstance(address, float) and np.isnan(address)) else str(address)
+    a = "" if a.strip().lower() in ("nan", "<na>", "none") else a
+    return bool(a.strip()) and not re.search(r",\s*\d", a)
+
+
+def _addr(r: pd.Series) -> str:
+    a = r.get("address", "")
+    return "" if a is None or (isinstance(a, float) and np.isnan(a)) else str(a)
+
+
+def fallback_query(r: pd.Series) -> str:
+    """«название, город» with the object's own viewport: the second query for a vague address."""
+    return search_url(r["name"], "", float(r["lat"]), float(r["lon"]), r["city"],
+                      r.get("yandex_region") or DEFAULT_REGION)
+
+
+FOUND = (STATUS_PRESENT, STATUS_CLOSED)
+
+
+def _answer(r: pd.Series, cache: dict, policy: Policy) -> tuple[dict | None, dict | None]:
+    """(cached record, verdict) for one object: the address query, else the fallback.
+
+    The fallback is read where the first answer is not «present»; it replaces
+    the first only when it says more: open over closed or nothing, closed over
+    nothing -- a miss never overrides a hit.
+    """
+    rec = cache.get(own_query(r))
+    v = None if rec is None else verdict(rec, str(r["name"]), float(r["lat"]), float(r["lon"]),
+                                         generic=bool(r["generic"]), policy=policy, address=_addr(r))
+    if policy.fallback_vague_address and vague_address(r["address"]) and (v is None or v["status"] != STATUS_PRESENT):
+        rec2 = cache.get(fallback_query(r))
+        if rec2 is not None:
+            v2 = verdict(rec2, str(r["name"]), float(r["lat"]), float(r["lon"]),
+                         generic=bool(r["generic"]), policy=policy, address=_addr(r))
+            if v is None or v2["status"] == STATUS_PRESENT or (v2["status"] in FOUND and v["status"] not in FOUND):
+                return rec2, v2
+    return rec, v
 
 
 def run(objects: pd.DataFrame, policy: Policy = DEFAULT,
@@ -530,11 +674,9 @@ def run(objects: pd.DataFrame, policy: Policy = DEFAULT,
                 "object_id": oid, "check": "yandex_contractor", "source": "yandex",
                 "identity": "weak", "record_state": "current", "name_score": c["sim"],
                 "label": policy.label_contractor_miss, "text": policy.contractor_miss_text})
-        rec = cache.get(own_query(r))
+        rec, v = _answer(r, cache, policy)
         if rec is None:
             continue
-        v = verdict(rec, str(r["name"]), float(r["lat"]), float(r["lon"]),
-                    generic=bool(r["generic"]), policy=policy)
         search = rec.get("search_url", "")
         _, text = _own_clause(v, rec.get("checked", ""), search)
         ident, state = _AXES[v["status"]]
@@ -548,7 +690,58 @@ def run(objects: pd.DataFrame, policy: Policy = DEFAULT,
             "ref": v["yandex_url"], "label": policy.label, "text": text,
             "yandex_status": v["status"], "yandex_nearby": v["yandex_nearby"],
             "yandex_search_url": search, "yandex_checked": rec.get("checked", "")})
+    if policy.exclusive_m > 0:
+        _one_card_one_site(rows, objects, policy.exclusive_m)
+    if policy.closed_overrides_contractor:
+        _closure_withdraws_contractor(rows)
     return evidence.make(rows) if rows else evidence.empty()
+
+
+_ORG_ID = re.compile(r"/org/(?:[^/?#]+/)?(\d+)")
+
+
+def org_id(url: str) -> str:
+    """Yandex's organisation id from a card URL («…/maps/org/kalendula/1790490145/» -> «1790490145»)."""
+    m = _ORG_ID.search(str(url or ""))
+    return m.group(1) if m else ""
+
+
+def _one_card_one_site(rows: list[dict], objects: pd.DataFrame, relink_m: float) -> None:
+    """Our query's card goes to the nearest claimant and those within `relink_m` of it.
+
+    The same rule as Overture's (`_directory.exclusive`).  A loser's row turns
+    into «absent» with the winner named: the card says nothing about it, open
+    or closed, and its rubric does not vote on its kind.
+    """
+    own = [i for i, row in enumerate(rows)
+           if row["check"] == "yandex" and row.get("yandex_status") in FOUND and row.get("ref")]
+    if not own:
+        return
+    ev = pd.DataFrame([{"object_id": rows[i]["object_id"], "ref": rows[i]["ref"],
+                        "distance_m": rows[i]["distance_m"], "identity": rows[i]["identity"],
+                        "_row": i, "_note": ""} for i in own])
+    ev = D.exclusive(ev, objects, relink_m, note_col="_note")
+    for _, e in ev[ev["_note"].astype(str).ne("")].iterrows():
+        row = rows[int(e["_row"])]
+        card = row["matched_name"]
+        row.update({
+            "identity": "none", "record_state": "unknown", "yandex_status": STATUS_ABSENT,
+            "kind_text": "", "matched_name": "", "matched_address": "", "ref": "",
+            "distance_m": np.nan, "name_score": np.nan,
+            "yandex_nearby": f"{card} — {e['_note']}",
+            "text": f"карточка «{card}» не засчитана: {e['_note']}"})
+
+
+def _closure_withdraws_contractor(rows: list[dict]) -> None:
+    """Where our query reads the very card the contractor counted as «Больше не работает»,
+    the contractor's hit (read in October, closures not seen) stops counting."""
+    closed = {row["object_id"]: org_id(row["ref"]) for row in rows
+              if row["check"] == "yandex" and row.get("yandex_status") == STATUS_CLOSED and org_id(row["ref"])}
+    for row in rows:
+        if (row["check"] == "yandex_contractor" and row["identity"] == "strong"
+                and closed.get(row["object_id"]) and org_id(row.get("ref", "")) == closed[row["object_id"]]):
+            row["identity"] = "weak"
+            row["text"] = row["text"] + "; наша проверка: «Больше не работает»"
 
 
 def wide(ev: pd.DataFrame, index: pd.Index | None = None) -> pd.DataFrame:
@@ -581,27 +774,12 @@ def wide(ev: pd.DataFrame, index: pd.Index | None = None) -> pd.DataFrame:
 
 # ------------------------------------------------------------------------- CLI
 
-def fetch_missing(ob: pd.DataFrame, cache: dict, cache_path, *, limit: int = 0,
-                  sleep: tuple[float, float] = (2.5, 4.5), failures: list | None = None) -> int:
-    """Read the pages missing from the cache, appending as it goes.
-
-    A failure is not an answer: not cached, asked again next run.  Returns the
-    number of pages cached. Repeated rows sharing a query use one request.
-    """
-    urls = [own_query(r) for _, r in ob.iterrows()]
-    missing = {}
-    for (_, r), url in zip(ob.iterrows(), urls, strict=True):
-        if url not in cache:
-            missing.setdefault(url, r)
-    todo = list(missing.values())
-    if limit:
-        todo = todo[:limit]
-    print(f"  Yandex: {len(ob):,} objects in scope, "
-          f"{sum(u in cache for u in urls):,} cached, {len(todo):,} to read now")
+def _read_all(todo: list, cache: dict, cache_path, *, sleep, failures, fallback: bool = False) -> int:
+    """Read `todo` rows one by one into the cache; `fallback` drops the address from the query."""
     done = 0
     for i, r in enumerate(todo, 1):
         try:
-            rec = read(r["name"], r["address"], float(r["lat"]), float(r["lon"]),
+            rec = read(r["name"], "" if fallback else r["address"], float(r["lat"]), float(r["lon"]),
                        sleep=tuple(sleep), city=r["city"],
                        region=r.get("yandex_region") or DEFAULT_REGION)
         except Exception as e:  # noqa: BLE001 -- one row must not end the run
@@ -619,6 +797,49 @@ def fetch_missing(ob: pd.DataFrame, cache: dict, cache_path, *, limit: int = 0,
     return done
 
 
+def fetch_missing(ob: pd.DataFrame, cache: dict, cache_path, *, limit: int = 0,
+                  sleep: tuple[float, float] = (2.5, 4.5), failures: list | None = None,
+                  policy: Policy = DEFAULT) -> int:
+    """Read the pages missing from the cache, appending as it goes.
+
+    A failure is not an answer: not cached, asked again next run.  Returns the
+    number of pages cached. Repeated rows sharing a query use one request.
+    With `policy.fallback_vague_address`, a second pass reads «название, город»
+    for objects with a vague address whose first answer, judged by `policy`,
+    did not find them (see `_answer`).
+    """
+    urls = [own_query(r) for _, r in ob.iterrows()]
+    missing = {}
+    for (_, r), url in zip(ob.iterrows(), urls, strict=True):
+        if url not in cache:
+            missing.setdefault(url, r)
+    todo = list(missing.values())
+    if limit:
+        todo = todo[:limit]
+    print(f"  Yandex: {len(ob):,} objects in scope, "
+          f"{sum(u in cache for u in urls):,} cached, {len(todo):,} to read now")
+    done = _read_all(todo, cache, cache_path, sleep=sleep, failures=failures)
+    if policy.fallback_vague_address:
+        second = {}
+        for (_, r), url in zip(ob.iterrows(), urls, strict=True):
+            if not vague_address(r["address"]):
+                continue
+            fq = fallback_query(r)
+            rec = cache.get(url)
+            if fq in cache or rec is None:  # first answer missing: asked again next run
+                continue
+            v = verdict(rec, str(r["name"]), float(r["lat"]), float(r["lon"]),
+                        generic=bool(r["generic"]), policy=policy, address=_addr(r))
+            if v["status"] != STATUS_PRESENT:
+                second.setdefault(fq, r)
+        todo2 = list(second.values())
+        if limit:
+            todo2 = todo2[:max(0, limit - len(todo))]
+        print(f"  Yandex fallback «название, город» for vague addresses: {len(todo2):,} to read now")
+        done += _read_all(todo2, cache, cache_path, sleep=sleep, failures=failures, fallback=True)
+    return done
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="python -m infracheck.checks.yandex", description=__doc__.splitlines()[0])
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -630,6 +851,7 @@ def main(argv=None) -> int:
     f.add_argument("--sleep", type=float, nargs=2, default=(2.5, 4.5), metavar=("MIN", "MAX"),
                    help="courtesy pause between requests")
     f.add_argument("--refresh", action="store_true", help="ignore the cache: re-read everything in scope")
+    f.add_argument("--policy-json", default="", help="the category's yandex Policy as JSON (fallback pass)")
     args = p.parse_args(argv)
 
     ob = pd.read_parquet(args.objects)
@@ -640,7 +862,9 @@ def main(argv=None) -> int:
         ob = ob.loc[ob.index.intersection(ids)]
     cache = {} if args.refresh else load_cache(args.cache)
     failures = []
-    fetch_missing(ob, cache, args.cache, limit=args.limit, sleep=tuple(args.sleep), failures=failures)
+    policy = Policy(**json.loads(args.policy_json)) if args.policy_json else DEFAULT
+    fetch_missing(ob, cache, args.cache, limit=args.limit, sleep=tuple(args.sleep), failures=failures,
+                  policy=policy)
     return int(bool(failures))
 
 

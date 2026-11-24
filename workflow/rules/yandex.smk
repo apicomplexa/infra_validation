@@ -38,6 +38,7 @@ rule yandex_fetch:
         "../envs/default.yaml"
     params:
         caches=[config["resources"]["yandex_cache"][category_of(d)["yandex_cache"]] for d in DELIVERIES.index],
+        policies=[category_of(d)["policy"].get("yandex", {}) for d in DELIVERIES.index],
         limit=config["yandex_fetch"]["limit"],
         sleep=config["yandex_fetch"]["sleep"],
     script:

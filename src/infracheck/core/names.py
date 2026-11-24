@@ -101,6 +101,144 @@ def _pair_similarity(ka: str, kb: str) -> float:
     return sim
 
 
+# Number signs: «No 4», «№ 4», «N 4» are one hospital.
+_NUMBER_SIGNS = frozenset({"no", "n", "nr"})
+
+
+def _words(text: str) -> set[str]:
+    return {t for t in re.sub(r"[^0-9a-zа-я ]+", " ", fold(text)).split() if t not in _NUMBER_SIGNS}
+
+
+def contains_words(export: str, directory: str, min_chars: int = 5) -> bool:
+    """True where every word of the export's fascia stands in the directory's name.
+
+    The directory often writes a medical organisation in full where the
+    export keeps the short form: «Окродент» / «Стоматология Окродент»,
+    «Центр ядерной медицины» / «СМКЦ имени Н. А. Семашко, центр ядерной
+    медицины», «Областная больница» / «Архангельская областная клиническая
+    больница, хирургический корпус».  `name_similarity` rejects these on
+    purpose (a chain's name inside a longer one is another shop: «Магнит» /
+    «Магнит Косметик»), so this rule is opt-in per category and is used only
+    at a short distance (the Yandex `contain_m` policy).  The part before the
+    first comma is the fascia; a trade-only name (`is_generic_directory`) or a
+    key shorter than `min_chars` never qualifies.
+    """
+    if is_generic_directory(export):
+        return False
+    key = fascia_name(str(export).split(",")[0]) or fold(str(export).split(",")[0])
+    words = _words(key)
+    if not words or len("".join(words)) < min_chars:
+        return False
+    return words <= _words(directory)
+
+
+# «Детский сад No101», «школа № 34», «N 4»: the number an institution goes by.
+_INST_NUMBER = re.compile(r"(?:№|\bno\.?|\bn)\s*(\d{1,4})\b")
+# The kind of institution a name opens with.  ORDER IS THE RULE where two
+# patterns start at one place: «школа искусств» is an art school before it is
+# a school.  Schools, kindergartens, art and sports schools are numbered apart.
+_INST_KINDS = [
+    ("art_school", r"школ\w* искусств|\bдши\b|музыкальн\w* школ|художественн\w* школ|хореографическ\w* школ"),
+    ("sport_school", r"спортивн\w* школ|\bдюсш|\bсдюсшор|\bсшор|спортшкол"),
+    ("creativity", r"творчеств|юных техник|юных натурал"),
+    ("kindergarten", r"детск\w* сад|\bдетсад|дошкольн|\bясли"),
+    ("college", r"колледж|техникум|училищ"),
+    ("school", r"школ|гимнази|лице[йя]"),
+    ("women", r"женск\w* консультац"),
+    ("polyclinic", r"поликлиник"),
+    ("hospital", r"больниц|\bгкб\b|\bгб\b|\bцгб\b|\bнцгб\b|\bцрб\b|госпитал"),
+    ("ambulance", r"подстанц|скор\w* медицинск"),
+    ("dental", r"стоматолог"),
+    ("pharmacy", r"аптек|аптечн"),
+    # «Отделение врача общей практики» / «…, центр общей врачебной практики»
+    ("general_practice", r"общ\w* (?:врачебн\w* )?практик"),
+]
+_INST_KIND_RX = [(k, re.compile(rx)) for k, rx in _INST_KINDS]
+# Trades that carry no number but do have a plain name: «Оптика», «Бассейн».
+_TRADE_KIND_RX = _INST_KIND_RX + [(k, re.compile(rx)) for k, rx in [
+    ("optics", r"оптик|очк"), ("lab", r"лаборатор"), ("clinic", r"клиник|медицинск\w* центр|медцентр"),
+    ("pool", r"бассейн"), ("stadium", r"стадион"), ("gym", r"спортзал|спортивн\w* зал|фитнес|тренажерн")]]
+# Words that qualify a trade without naming a business: «Взрослая поликлиника»,
+# «Магазин готовых очков», «Детский сад комбинированного вида».
+_TRADE_QUALIFIERS = frozenset({
+    "взрослая", "взрослый", "взрослых", "детская", "детский", "детских", "детское", "городская", "городской",
+    "областная", "областной", "центральная", "центральный", "районная", "районный", "клиническая", "клинический",
+    "первая", "вторая", "третья", "отделение", "отделения", "офис", "кабинет", "врача", "общей", "практики",
+    "врачебной", "медицинской", "медицинский", "медицинская", "помощи", "филиал", "пункт", "пункта", "участок",
+    "средняя", "основная", "начальная", "общеобразовательная", "комбинированного", "общеразвивающего", "вида",
+    "учреждения", "учреждение", "дошкольные", "дошкольное", "магазин", "салон", "центр", "дисконт", "готовых",
+    "при", "имени", "муниципальное", "бюджетное", "государственное", "автономное", "гбуз", "гбоу", "мбоу",
+    "мбдоу", "мадоу", "для"})
+
+
+def _institution(name: str) -> tuple[str, int | None]:
+    """(kind of the first institution word, first institution number) of one name."""
+    s = fold(str(name))
+    hits = [(m.start(), i, k) for i, (k, rx) in enumerate(_INST_KIND_RX) if (m := rx.search(s))]
+    kind = min(hits)[2] if hits else ""
+    num = _INST_NUMBER.search(s)
+    return kind, (int(num.group(1)) if num else None)
+
+
+# Public medical institutions are named by place, not by brand: «Исакогорская
+# подстанция скорой медицинской помощи», «Соломбальская поликлиника».  There an
+# adjective is a district; «Добрая аптека» is a chain, so trades stay out.
+_PUBLIC_KINDS = frozenset({"ambulance", "hospital", "polyclinic", "women", "general_practice"})
+_ADJECTIVE = re.compile(r"(?:ая|яя|ий|ый|ой|ое|ее|ые|ие|ых|их|ого|его|ей|ую|юю)$")
+_QUOTES = re.compile(r"[«»\"“”„]")
+
+
+def trade_kind(name: str, public_places: bool = False) -> str:
+    """The trade a name gives where it gives nothing else, «» for a business name.
+
+    «Взрослая поликлиника» -> «polyclinic», «Магазин готовых очков» -> «optics»,
+    «Городская больница No 4» -> «hospital»; «Фармомед», «Детский сад
+    "Незабудка"», «Аптека Антей» -> «» (a name of its own is compared by name).
+    With `public_places`, a public medical institution qualified only by
+    adjectives and without a quoted name keeps its kind: «Исакогорская
+    подстанция скорой медицинской помощи» -> «ambulance»; «Поликлиника
+    "Здоровье"», «Добрая аптека» -> «».
+    """
+    s = _INST_NUMBER.sub(" ", fold(str(name)).replace("ё", "е"))
+    hits = sorted((m.start(), i, k) for i, (k, rx) in enumerate(_TRADE_KIND_RX) for m in rx.finditer(s))
+    if not hits:
+        return ""
+    rest = s
+    for _, rx in _TRADE_KIND_RX:  # cut each kind word whole, ending included («поликлиник|а»)
+        rest = re.sub(rf"\w*(?:{rx.pattern})\w*", " ", rest)
+    leftovers = [w for w in re.findall(r"[a-zа-я]+", rest) if len(w) >= 3 and w not in _TRADE_QUALIFIERS]
+    if (leftovers and public_places and hits[0][2] in _PUBLIC_KINDS and not _QUOTES.search(str(name))
+            and all(_ADJECTIVE.search(w) for w in leftovers)):
+        return hits[0][2]
+    return "" if leftovers else hits[0][2]
+
+
+def has_kind(kind: str, name: str) -> bool:
+    """Does `name` mention the trade `kind` anywhere («…, поликлиника» has «polyclinic»)?"""
+    rx = dict(_TRADE_KIND_RX).get(kind)
+    return bool(rx and rx.search(fold(str(name)).replace("ё", "е")))
+
+
+def number_agreement(export: str, directory: str) -> bool | None:
+    """Do two names give the same institution its number?  None where that cannot be told.
+
+    The export writes «No101» or «No 34», Yandex and Overture «№ 101»; the
+    ratio rule scores «Детский сад No101 комбинированного вида» / «Детский сад
+    № 101» below its threshold, yet «Средняя школа No 34» / «Средняя школа
+    № 43» at 86.  Only where both names open with the same kind of institution
+    (`_INST_KINDS`) and both carry a number: the same first number is one
+    institution (True), a different one never is (False).  Otherwise -- «Средняя
+    школа № 60» / «Детский сад при школе № 60», «Детская школа искусств № 2» /
+    «Средняя школа № 2», no number on one side -- the similarity rule decides
+    (None).  Opt-in per check through the `numbers` policy field.
+    """
+    ka, na = _institution(export)
+    kb, nb = _institution(directory)
+    if na is None or nb is None or not ka or ka != kb:
+        return None
+    return na == nb
+
+
 def is_generic_directory(name: str) -> bool:
     """True where the fascia names a trade rather than a business (Yandex rule)."""
     key = fascia_name(name)

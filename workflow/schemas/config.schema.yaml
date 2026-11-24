@@ -137,6 +137,15 @@ $defs:
               near_m: {type: number, exclusiveMinimum: 0}
               generic_m: {type: number, exclusiveMinimum: 0}
               name_min: {type: number, minimum: 0, maximum: 100}
+              contain_m: {type: number, minimum: 0}
+              numbers: {type: boolean}
+              paused_is_closed: {type: boolean}
+              fallback_vague_address: {type: boolean}
+              prefer_open_m: {type: number, minimum: 0}
+              exclusive_m: {type: number, minimum: 0}
+              closed_overrides_contractor: {type: boolean}
+              address_kind: {type: boolean}
+              address_loose_m: {type: number, minimum: 0}
               contractor_status_found: {type: string}
               contractor_miss_text: {type: string}
               label: {type: string}
@@ -233,6 +242,7 @@ $defs:
           group: {type: string}
           column: {type: string}
           skip_checks: {$ref: "#/$defs/strings"}
+          all: {type: boolean}
         required: [group, column]
         additionalProperties: false
       how:

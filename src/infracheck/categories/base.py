@@ -169,6 +169,10 @@ class Spec:
     query_group: str = ""
     query_column: str = ""
     query_skip_checks: tuple[str, ...] = ()
+    # Queue every object for our query, not only those it could still decide:
+    # an object two other sources confirm may have closed since (Yandex's
+    # «Больше не работает»).  `needs_query` keeps its meaning either way.
+    query_all: bool = False
     how_column: str = ""
     how_parts: tuple[Mapping, ...] = ()
     how_sep: str = "; "
@@ -221,6 +225,7 @@ class Spec:
             kind=kind,
             query_group=q.get("group", ""), query_column=q.get("column", ""),
             query_skip_checks=tuple(q.get("skip_checks", [])),
+            query_all=bool(q.get("all", False)),
             how_column=how.get("column", ""), how_parts=tuple(how.get("parts", [])),
             how_sep=how.get("sep", "; "),
             derived=dict(block.get("derived", {})),

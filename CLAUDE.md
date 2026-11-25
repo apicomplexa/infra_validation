@@ -103,8 +103,10 @@ the matching rules found by checking against the supervisor's manual review).
   object; count the contractor's «Найдено» when our query read that card closed.
 - `workflow/scripts/unified_base.py` — one row per merged object across deliveries,
   supervisor's flag names (`OSM`, `GIS`, `yandex`, ...), «В базу», «Почему не в базе»,
-  «Что проверить вручную»; the name comes from the OSM record (the fascia), the
-  other record names go to «Другие названия»; `--books DIR --stamp YYMMDD` writes one workbook per
+  «Что проверить вручную»; name and point come from the 2GIS record (else OSM), the
+  other record names go to «Другие названия»; one state medical institution on one
+  site is one row («Входит в»), OSM + Roszdrav alone does not place an object
+  (`docs/changes/2026-11-25-nm-same-site.md`); `--books DIR --stamp YYMMDD` writes one workbook per
   category (sheets База, Все объекты, На ручную проверку sorted by address, Этапы,
   Возможные дубли, Переменные). Works for any category.
 - Windows without WSL: Docker Desktop, image `ghcr.io/prefix-dev/pixi:latest`, pixi

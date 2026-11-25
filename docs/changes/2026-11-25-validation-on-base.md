@@ -60,3 +60,7 @@
 - `pixi.toml`: `python-docx`; задача `calibration-current`.
 
 Порядок сборки: `pixi run calibration-current` → `pixi run deliverable`.
+
+Сводные таблицы обеих оценок (без названий и адресов) — `docs/validation/2026-11-25/`;
+сырьё с данными Яндекса и 2ГИС (пакеты, ответы судей, метки аудитора) — локально в
+`resources/validation/2026-11-25/`, вне git (репозиторий публичный).

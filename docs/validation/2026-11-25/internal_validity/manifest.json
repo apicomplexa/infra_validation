@@ -1,0 +1,523 @@
+{
+  "purpose": "internal validity of match decisions (object <-> source record), stage 1: sample + blind packets",
+  "seed": 20261122,
+  "git_head": "e0b19d96cbef06795a800cc254d427b0a60852e3",
+  "script": "workflow/scripts/internal_validity_sample.py",
+  "unit": "one decision object <-> source record",
+  "dedupe": "per source on (city, object name, coords to 1e-5, candidate record); the first occurrence in deliveries_finalest.tsv order wins (catering before risk layers, tobacco before alcohol), so a pair seen in two deliveries is one decision with the first delivery's verdict",
+  "within_stratum_design": "simple random sample without replacement (SHA-256 rank of seed|stratum|key); weight = population / sample",
+  "rejected_candidate_rule": "Yandex: most alike organisation on the page if similarity >= near_sim_split (stratum *_near), else the nearest (*_other); Overture/FSQ: most alike place within the check's radius, split at near_sim_split; Overture places below the confidence floor that pass the name floor form overture_rejected_confidence; relink: most alike other-provider record within relink_m",
+  "near_sim_split": 50.0,
+  "n_packets": 4,
+  "n_decisions": 265,
+  "packet_sizes": {
+    "1": 66,
+    "2": 67,
+    "3": 66,
+    "4": 66
+  },
+  "strata": {
+    "yandex_accepted": {
+      "population": 2235,
+      "target": 28,
+      "sample": 28,
+      "weight": 79.8214,
+      "duplicates_dropped": 1378,
+      "population_by_city": {
+        "Архангельск": 1424,
+        "Новодвинск": 126,
+        "Северодвинск": 685
+      },
+      "sample_by_city": {
+        "Архангельск": 16,
+        "Северодвинск": 12
+      }
+    },
+    "yandex_rejected_near": {
+      "population": 306,
+      "target": 16,
+      "sample": 16,
+      "weight": 19.125,
+      "duplicates_dropped": 141,
+      "population_by_city": {
+        "Архангельск": 200,
+        "Новодвинск": 25,
+        "Северодвинск": 81
+      },
+      "sample_by_city": {
+        "Архангельск": 11,
+        "Новодвинск": 2,
+        "Северодвинск": 3
+      }
+    },
+    "yandex_rejected_other": {
+      "population": 404,
+      "target": 8,
+      "sample": 8,
+      "weight": 50.5,
+      "duplicates_dropped": 217,
+      "population_by_city": {
+        "Архангельск": 276,
+        "Новодвинск": 38,
+        "Северодвинск": 90
+      },
+      "sample_by_city": {
+        "Архангельск": 6,
+        "Новодвинск": 1,
+        "Северодвинск": 1
+      }
+    },
+    "yandex_closed": {
+      "population": 330,
+      "target": 10,
+      "sample": 10,
+      "weight": 33.0,
+      "duplicates_dropped": 253,
+      "population_by_city": {
+        "Архангельск": 262,
+        "Новодвинск": 19,
+        "Северодвинск": 49
+      },
+      "sample_by_city": {
+        "Архангельск": 9,
+        "Северодвинск": 1
+      }
+    },
+    "yandex_contractor_accepted": {
+      "population": 777,
+      "target": 5,
+      "sample": 5,
+      "weight": 155.4,
+      "duplicates_dropped": 64,
+      "population_by_city": {
+        "Архангельск": 507,
+        "Новодвинск": 48,
+        "Северодвинск": 222
+      },
+      "sample_by_city": {
+        "Архангельск": 2,
+        "Новодвинск": 1,
+        "Северодвинск": 2
+      }
+    },
+    "yandex_contractor_rejected": {
+      "population": 257,
+      "target": 5,
+      "sample": 5,
+      "weight": 51.4,
+      "duplicates_dropped": 1,
+      "population_by_city": {
+        "Архангельск": 175,
+        "Новодвинск": 9,
+        "Северодвинск": 73
+      },
+      "sample_by_city": {
+        "Архангельск": 2,
+        "Новодвинск": 1,
+        "Северодвинск": 2
+      }
+    },
+    "yandex_contractor_withdrawn": {
+      "population": 54,
+      "target": 5,
+      "sample": 5,
+      "weight": 10.8,
+      "duplicates_dropped": 1,
+      "population_by_city": {
+        "Архангельск": 40,
+        "Новодвинск": 3,
+        "Северодвинск": 11
+      },
+      "sample_by_city": {
+        "Архангельск": 3,
+        "Новодвинск": 1,
+        "Северодвинск": 1
+      }
+    },
+    "merge_unlike_names": {
+      "population": 614,
+      "target": 20,
+      "sample": 20,
+      "weight": 30.7,
+      "duplicates_dropped": 104,
+      "population_by_city": {
+        "Архангельск": 442,
+        "Новодвинск": 18,
+        "Северодвинск": 154
+      },
+      "sample_by_city": {
+        "Архангельск": 18,
+        "Новодвинск": 1,
+        "Северодвинск": 1
+      }
+    },
+    "merge_alike_names": {
+      "population": 363,
+      "target": 9,
+      "sample": 9,
+      "weight": 40.3333,
+      "duplicates_dropped": 193,
+      "population_by_city": {
+        "Архангельск": 239,
+        "Новодвинск": 26,
+        "Северодвинск": 98
+      },
+      "sample_by_city": {
+        "Архангельск": 7,
+        "Северодвинск": 2
+      }
+    },
+    "relink_accepted": {
+      "population": 328,
+      "target": 10,
+      "sample": 10,
+      "weight": 32.8,
+      "duplicates_dropped": 393,
+      "population_by_city": {
+        "Архангельск": 223,
+        "Новодвинск": 15,
+        "Северодвинск": 90
+      },
+      "sample_by_city": {
+        "Архангельск": 5,
+        "Новодвинск": 1,
+        "Северодвинск": 4
+      }
+    },
+    "relink_rejected": {
+      "population": 891,
+      "target": 5,
+      "sample": 5,
+      "weight": 178.2,
+      "duplicates_dropped": 607,
+      "population_by_city": {
+        "Архангельск": 596,
+        "Новодвинск": 65,
+        "Северодвинск": 230
+      },
+      "sample_by_city": {
+        "Архангельск": 3,
+        "Северодвинск": 2
+      }
+    },
+    "fsq_accepted": {
+      "population": 447,
+      "target": 28,
+      "sample": 28,
+      "weight": 15.9643,
+      "duplicates_dropped": 323,
+      "population_by_city": {
+        "Архангельск": 301,
+        "Новодвинск": 7,
+        "Северодвинск": 139
+      },
+      "sample_by_city": {
+        "Архангельск": 16,
+        "Новодвинск": 2,
+        "Северодвинск": 10
+      }
+    },
+    "fsq_rejected_near": {
+      "population": 732,
+      "target": 14,
+      "sample": 14,
+      "weight": 52.2857,
+      "duplicates_dropped": 446,
+      "population_by_city": {
+        "Архангельск": 518,
+        "Новодвинск": 20,
+        "Северодвинск": 194
+      },
+      "sample_by_city": {
+        "Архангельск": 10,
+        "Новодвинск": 1,
+        "Северодвинск": 3
+      }
+    },
+    "fsq_rejected_low": {
+      "population": 1780,
+      "target": 4,
+      "sample": 4,
+      "weight": 445.0,
+      "duplicates_dropped": 1067,
+      "population_by_city": {
+        "Архангельск": 1151,
+        "Новодвинск": 149,
+        "Северодвинск": 480
+      },
+      "sample_by_city": {
+        "Архангельск": 2,
+        "Северодвинск": 2
+      }
+    },
+    "fsq_rejected_exclusive": {
+      "population": 16,
+      "target": 2,
+      "sample": 2,
+      "weight": 8.0,
+      "duplicates_dropped": 7,
+      "population_by_city": {
+        "Архангельск": 11,
+        "Новодвинск": 1,
+        "Северодвинск": 4
+      },
+      "sample_by_city": {
+        "Архангельск": 1,
+        "Новодвинск": 1
+      }
+    },
+    "overture_accepted": {
+      "population": 295,
+      "target": 24,
+      "sample": 24,
+      "weight": 12.2917,
+      "duplicates_dropped": 166,
+      "population_by_city": {
+        "Архангельск": 214,
+        "Новодвинск": 8,
+        "Северодвинск": 73
+      },
+      "sample_by_city": {
+        "Архангельск": 18,
+        "Новодвинск": 1,
+        "Северодвинск": 5
+      }
+    },
+    "overture_rejected_near": {
+      "population": 185,
+      "target": 7,
+      "sample": 7,
+      "weight": 26.4286,
+      "duplicates_dropped": 128,
+      "population_by_city": {
+        "Архангельск": 139,
+        "Новодвинск": 1,
+        "Северодвинск": 45
+      },
+      "sample_by_city": {
+        "Архангельск": 6,
+        "Северодвинск": 1
+      }
+    },
+    "overture_rejected_confidence": {
+      "population": 22,
+      "target": 2,
+      "sample": 2,
+      "weight": 11.0,
+      "duplicates_dropped": 9,
+      "population_by_city": {
+        "Архангельск": 13,
+        "Северодвинск": 9
+      },
+      "sample_by_city": {
+        "Архангельск": 2
+      }
+    },
+    "overture_rejected_low": {
+      "population": 2315,
+      "target": 2,
+      "sample": 2,
+      "weight": 1157.5,
+      "duplicates_dropped": 1434,
+      "population_by_city": {
+        "Архангельск": 1513,
+        "Новодвинск": 132,
+        "Северодвинск": 670
+      },
+      "sample_by_city": {
+        "Архангельск": 1,
+        "Северодвинск": 1
+      }
+    },
+    "overture_rejected_exclusive": {
+      "population": 10,
+      "target": 2,
+      "sample": 2,
+      "weight": 5.0,
+      "duplicates_dropped": 3,
+      "population_by_city": {
+        "Архангельск": 5,
+        "Новодвинск": 3,
+        "Северодвинск": 2
+      },
+      "sample_by_city": {
+        "Архангельск": 1,
+        "Северодвинск": 1
+      }
+    },
+    "egais_accepted": {
+      "population": 542,
+      "target": 28,
+      "sample": 28,
+      "weight": 19.3571,
+      "duplicates_dropped": 425,
+      "population_by_city": {
+        "Архангельск": 337,
+        "Новодвинск": 42,
+        "Северодвинск": 163
+      },
+      "sample_by_city": {
+        "Архангельск": 16,
+        "Новодвинск": 3,
+        "Северодвинск": 9
+      }
+    },
+    "egais_rejected": {
+      "population": 1192,
+      "target": 26,
+      "sample": 26,
+      "weight": 45.8462,
+      "duplicates_dropped": 134,
+      "population_by_city": {
+        "Архангельск": 788,
+        "Новодвинск": 60,
+        "Северодвинск": 344
+      },
+      "sample_by_city": {
+        "Архангельск": 14,
+        "Новодвинск": 3,
+        "Северодвинск": 9
+      }
+    },
+    "egais_inactive": {
+      "population": 56,
+      "target": 5,
+      "sample": 5,
+      "weight": 11.2,
+      "duplicates_dropped": 5,
+      "population_by_city": {
+        "Архангельск": 36,
+        "Новодвинск": 1,
+        "Северодвинск": 19
+      },
+      "sample_by_city": {
+        "Архангельск": 3,
+        "Северодвинск": 2
+      }
+    }
+  },
+  "blind_fields_excluded": [
+    "pipeline decision",
+    "stratum",
+    "identity / record_state",
+    "name scores",
+    "thresholds",
+    "Overture confidence",
+    "selection rule"
+  ],
+  "not_sampled": {
+    "fsq_stale_or_closed": "FSQ record matched but stale/closed: a state decision, never counted",
+    "tobacco_egais": "EGAIS is never a source for tobacco (never_count); its matches are hints only",
+    "arkh_admin": "column empty in all rows of all nine files: no decisions exist",
+    "distance_rejections": "candidates outside the check's radius are not considered (only the radius the check itself searched)",
+    "yandex_error_and_unread": "objects never queried (verdict did not depend on Yandex) or answered with an error have no decision",
+    "merge_rejections": "the contractor's declined OSM/2GIS pairs are not in the delivery"
+  },
+  "inputs": {
+    "config/deliveries_finalest.tsv": "c258dce874a189f5b6cc7f81a924a426f185e34061e21342a5e0252c534d4d93",
+    "config/config.yaml": "e0e7665f0db6b448b5bfd2fb36575434a647706edfa1751cb338e005798647af",
+    "config/finalest.yaml": "8f4a49a3919205ada651898320b08bc8455a0d4e3e1c8a1bfc5a0b9f7cfde039",
+    "data/temp/egais/registry.tsv": "7e6e6ca05f541284972f619f950404be79ab770b9fc71a94979600e1171522a8",
+    "resources/overture/overture_places_2026-10-21.0.parquet": "cf0a7c2c1f42739b961c9383b17378ffe877d08c5d59bea82668a6c47625d85f",
+    "resources/foursquare/fsq_places_2026-10-15.parquet": "4c69ab84072cc8e56654f1a78b245cc53f66ec0330cc201377ca2023bf77f3ab",
+    "resources/cache/yandex/final_yandex_cache.jsonl": "74b816559af15632546054eeebde97dfc8bd5bab5363f939e143a26c1fd049cf",
+    "resources/cache/yandex/v4_yandex_cache.jsonl": "6577e007ad129e398fc2b4d21ab5893d0e88449b2155ecd55410717c5c4b96b0",
+    "resources/cache/yandex/nm_yandex_cache.jsonl": null,
+    "data/raw/finalest/infrastructure_архангельск_2026-10-22_yandex_2026-10-23_005502_общепит.xlsx": "e4d24e8140d27cc726d1745d6e330c1ae243b071d9779d198407e06c89714b04",
+    "data/temp/finalest_arkhangelsk_catering/objects.parquet": "a0f65391402026d6c27f9e14314f80a5274854a5b51078849af9f8582c189af1",
+    "data/temp/finalest_arkhangelsk_catering/rowmap.parquet": "19dd1ebe0cad81a230a98eeea78f8d2eba2856377c0324313425b2acad97e891",
+    "data/temp/finalest_arkhangelsk_catering/evidence/arkh_admin.parquet": "6d1391dcc8e89b9271f34d455e4312b8f2620903be376665b9be7d3160614f76",
+    "data/temp/finalest_arkhangelsk_catering/evidence/egais.parquet": "3abd9b0d3c01e0c6a75e3a273636abc636fbb1c40d41a6894f3fd83ea61822a9",
+    "data/temp/finalest_arkhangelsk_catering/evidence/export_name.parquet": "3b4fed664bb1841019ab72a31dda7a140a1768808653cc60aae1c26248545b55",
+    "data/temp/finalest_arkhangelsk_catering/evidence/foursquare.parquet": "47ebc9e7d3664c57db0e1bb0b784bbb5172248684dcc3dea98c9625469d71972",
+    "data/temp/finalest_arkhangelsk_catering/evidence/overture.parquet": "4b40b51f1522abcf4704d7197fd0f40dd4f5079d4f4b9b18981b0d2f63c70465",
+    "data/temp/finalest_arkhangelsk_catering/evidence/providers.parquet": "96c66303886abb2ee6db917a7094edc420577ad828ec0c2f16685bd14778f276",
+    "data/temp/finalest_arkhangelsk_catering/evidence/yandex.parquet": "eb7644d5309806518a3e95d18f3e6a96bda43a80cb959c10a282bf9032116e98",
+    "data/raw/finalest/infrastructure_новодвинск_2026-10-27_yandex_2026-10-27_142003_080672_общепит.xlsx": "6d48af6eb666afa3bf14c6d1b63b2055e2db055a985af20e44d6a2bab751e66a",
+    "data/temp/finalest_novodvinsk_catering/objects.parquet": "8190c5c1e20082e80505b9ea75ad05980e9ef8267fb41221837c20371f67c736",
+    "data/temp/finalest_novodvinsk_catering/rowmap.parquet": "3f66b386a8d4d42347abeec84c2af2395a08a3ed89b3bdd1a7ee73f51f6d8b88",
+    "data/temp/finalest_novodvinsk_catering/evidence/arkh_admin.parquet": "6d1391dcc8e89b9271f34d455e4312b8f2620903be376665b9be7d3160614f76",
+    "data/temp/finalest_novodvinsk_catering/evidence/egais.parquet": "099bb4eb2f5fa33fc281c1b62bd928cba3ed29c81aabeb762c31aadc157bac40",
+    "data/temp/finalest_novodvinsk_catering/evidence/export_name.parquet": "1ac4ff740545524382eb87e0544799fd83a569ef29910bf6d4df02361781de67",
+    "data/temp/finalest_novodvinsk_catering/evidence/foursquare.parquet": "4068eedc16b10f112cdba641398176407d93a47fe8fa52ad5b7b635fa66b456c",
+    "data/temp/finalest_novodvinsk_catering/evidence/overture.parquet": "5bd205940850a873ccda2bfc19217b737064dde5c58a656ad9a1e35b3042394f",
+    "data/temp/finalest_novodvinsk_catering/evidence/providers.parquet": "a6ecbe720be498eadf7ed9ac11ea57b86f31a23598718fbb8d72207d94d9e5f8",
+    "data/temp/finalest_novodvinsk_catering/evidence/yandex.parquet": "7912c51d1eda74f3f12d589ca66574fbfb7de6e5a848f327f84e32314347c0fd",
+    "data/raw/finalest/infrastructure_северодвинск_2026-10-23_yandex_2026-10-23_115321_общепит.xlsx": "2a0885e6cff39f1225d7ad58a8f95705bdd63a746f82867476dcd30618f8a96a",
+    "data/temp/finalest_severodvinsk_catering/objects.parquet": "28bba2ce02d026c8f30350f78ed03b2c6c6d471f6b8be278a9a10811a802dc95",
+    "data/temp/finalest_severodvinsk_catering/rowmap.parquet": "bb88d1a71f0987c74566305204fd73979ffd4a0c5d26755f3903eea8c1da54cf",
+    "data/temp/finalest_severodvinsk_catering/evidence/arkh_admin.parquet": "6d1391dcc8e89b9271f34d455e4312b8f2620903be376665b9be7d3160614f76",
+    "data/temp/finalest_severodvinsk_catering/evidence/egais.parquet": "00ea9ca2b5dc6e93228cba2e6689ab56693e375c592de3480331797fc70ef9e8",
+    "data/temp/finalest_severodvinsk_catering/evidence/export_name.parquet": "b680c21f22e45665ed671d3dd5023fce55693272f0464b480f136772ce7a781e",
+    "data/temp/finalest_severodvinsk_catering/evidence/foursquare.parquet": "2a1787766fe245204ca3e605f875421d1be83254fbf06e229ffc443441e100a7",
+    "data/temp/finalest_severodvinsk_catering/evidence/overture.parquet": "9a0cfd12dc6a1ecd34acafb12fbfcc070489027410d2a0ecdcd76046e780806e",
+    "data/temp/finalest_severodvinsk_catering/evidence/providers.parquet": "f154e925f4e7b4ce2a15a23dc1b84915b5000545c9b8ead29042072c42430fb3",
+    "data/temp/finalest_severodvinsk_catering/evidence/yandex.parquet": "2853bb91a328da518c77d5299d8b18bdaaa5f22f6c5549ade9e8b719274e7f86",
+    "data/raw/finalest/infrastructure_архангельск_2026-10-31_132027_yandex_2026-10-31_223517_табак.xlsx": "59c0c470e2d173c3009f00bc3d0e73cf7505f98cd4680916d41d46f815534a11",
+    "data/temp/finalest_arkhangelsk_tobacco/objects.parquet": "b44bfc0eea49def458737d0e7310312ed0bdb3d89d8ea6765a4a9919d1b52d43",
+    "data/temp/finalest_arkhangelsk_tobacco/rowmap.parquet": "13fc3f6b72cc282cf29e4529795d601f18f28a13c288905bc67f9267c2243352",
+    "data/temp/finalest_arkhangelsk_tobacco/evidence/egais.parquet": "b5d4f4c7516e6ea54aeeaef5f976ce4f1fa0e0d43a965e3da7c100ee0759d2c2",
+    "data/temp/finalest_arkhangelsk_tobacco/evidence/export_name.parquet": "4218dc7acb414f670796590fb4c687ec5f1cdfa1da87dee2c06a2a8915eaab35",
+    "data/temp/finalest_arkhangelsk_tobacco/evidence/foursquare.parquet": "3fddb3e5fdb11ceac62133b425917217eaef81c001f3c879f179e68d8935a71f",
+    "data/temp/finalest_arkhangelsk_tobacco/evidence/overture.parquet": "c5641925f735c4c7c32c24b0b047bd98eb4184e678297f7007e3674e98ad5e0d",
+    "data/temp/finalest_arkhangelsk_tobacco/evidence/providers.parquet": "23f82f22c5c112912ffa2faab71d7b9060cc47f0e04c5561de04891adf402a11",
+    "data/temp/finalest_arkhangelsk_tobacco/evidence/yandex.parquet": "8e4d40c032e71c07ed3dc8d1ec0058b7fcf89de4addf280acc64c82a652e37c4",
+    "data/raw/finalest/infrastructure_архангельск_2026-10-31_yandex_2026-10-31_021311_алкоголь.xlsx": "97f12d371b2a2ebaf36268a639d3a88406dd8695f0143e239c292eda716cfe65",
+    "data/temp/finalest_arkhangelsk_alcohol/objects.parquet": "abb12551273eb5dcf5d643fd9c1eac11dc4a1690c538fe075150f8dff3e6361c",
+    "data/temp/finalest_arkhangelsk_alcohol/rowmap.parquet": "6c6496325b8a2a9dd3da8058d6a6b3edc63a18102f712b54d4f682aee55e39f4",
+    "data/temp/finalest_arkhangelsk_alcohol/evidence/egais.parquet": "32460519abeccec2b78a8c1ca2541c177461de837523d8333aa20451cd1b717f",
+    "data/temp/finalest_arkhangelsk_alcohol/evidence/export_name.parquet": "cb0e5199de10aba8152e0254d7b71a0c7551bdc18c8f6c0db5360e380f8b77d4",
+    "data/temp/finalest_arkhangelsk_alcohol/evidence/foursquare.parquet": "95a1372e081b51d6f95357f75dd4af5a1b6997d9c5f326ffd1c79c3d11a421b5",
+    "data/temp/finalest_arkhangelsk_alcohol/evidence/overture.parquet": "262cdf66b1572c8400f1ac3dedf8b5c1772e557ec67ff81129cbcc2f50c3032f",
+    "data/temp/finalest_arkhangelsk_alcohol/evidence/providers.parquet": "a37309b42693954df90c6d8fe4eaa7c84f06ca724551ea081c57caecc2192771",
+    "data/temp/finalest_arkhangelsk_alcohol/evidence/yandex.parquet": "3cd9ab0ceee4d736401264987c2b82bbfa715f7d642b85eb9680f835a447fec6",
+    "data/raw/finalest/infrastructure_новодвинск_2026-11-01_yandex_2026-11-01_123330_табак.xlsx": "dd3f40faf429172b81c098c7349c2ae6a164da4ce8e68d9b77023a9fb32214ee",
+    "data/temp/finalest_novodvinsk_tobacco/objects.parquet": "2388d360a3e003b0914391ef7be41d8992a50a07701b16b85a8379010bed7383",
+    "data/temp/finalest_novodvinsk_tobacco/rowmap.parquet": "73231c2b1781cd74d739affdc4c0295a4f29fcabe32bcd3f6dc653ddcbf8bab9",
+    "data/temp/finalest_novodvinsk_tobacco/evidence/egais.parquet": "0ca942ebd14a1e5c46eab36d68907a638993e015a5aa8356fdccbc23537cb7cc",
+    "data/temp/finalest_novodvinsk_tobacco/evidence/export_name.parquet": "d007d8a8d6a7bbff54e1c719628c638b20771975c0acaa270293c857847820a8",
+    "data/temp/finalest_novodvinsk_tobacco/evidence/foursquare.parquet": "85d7b9848d4adff2fd596b7c7a62a0766977378635f3cdda1324463dcd112b9a",
+    "data/temp/finalest_novodvinsk_tobacco/evidence/overture.parquet": "4af5295077edebdfd68f23f51c61c652385d67ef85e12a2c4e8a0020ef5dc32e",
+    "data/temp/finalest_novodvinsk_tobacco/evidence/providers.parquet": "88049e5d04c8ebbacc2b4033a3d70d8597445efdcd3ac429965e4ea07dbfa4dc",
+    "data/temp/finalest_novodvinsk_tobacco/evidence/yandex.parquet": "90eb72e80d0c1716b006280ec059309b163b3a5006969d93a7c106ddf716a396",
+    "data/raw/finalest/infrastructure_новодвинск_2026-10-31_yandex_2026-11-01_125233_алкоголь.xlsx": "29788013f1afb039190bbcb777790d908b7b7fcce4e334c0e7690fa59051bd43",
+    "data/temp/finalest_novodvinsk_alcohol/objects.parquet": "949f82b4c5b1931c04c8ccfaa4fa7d6d17af9afe23643181686ee71f487e4a47",
+    "data/temp/finalest_novodvinsk_alcohol/rowmap.parquet": "7dbf6f26263d15c845df65a377e373b013f48d229c35d8984a7d6bd8132519c7",
+    "data/temp/finalest_novodvinsk_alcohol/evidence/egais.parquet": "c620d996823df6e39a8053d8260c0af726be10c8e754c4ca62c2054100080347",
+    "data/temp/finalest_novodvinsk_alcohol/evidence/export_name.parquet": "8db7db8d3a857a1aef981a3b401c9904995f44eb428a8799fa51913bd17b5ab9",
+    "data/temp/finalest_novodvinsk_alcohol/evidence/foursquare.parquet": "2e21fa552aec8d353ca24adf2bed5877670664bc97d6558dcbfe9eebbaf00d2e",
+    "data/temp/finalest_novodvinsk_alcohol/evidence/overture.parquet": "bd56c4c63f8063ac84a3f106f249212090823f54f3495234772f49982c41e909",
+    "data/temp/finalest_novodvinsk_alcohol/evidence/providers.parquet": "b57f157ee59b59cca3698bf5ff7d03cbc555de9ce0d6e5d1231090f70f22f873",
+    "data/temp/finalest_novodvinsk_alcohol/evidence/yandex.parquet": "846bdb8ec1a03ae32a7e6e62bb690524d140f86405c3fafe0d4fd8b2b553ad88",
+    "data/raw/finalest/infrastructure_северодвинск_2026-11-01_yandex_2026-11-01_120518_табак.xlsx": "87b91e6293e6219f7dc8f8506147287da5f4abf8a9d5587983e22f12699b1317",
+    "data/temp/finalest_severodvinsk_tobacco/objects.parquet": "daa17d8be673ee9030c54634e4f175d65afbfddda6b12511599ab1a50f9e40f5",
+    "data/temp/finalest_severodvinsk_tobacco/rowmap.parquet": "141769b28ee1541db502acf34afdc52bc1be2bf2b6cf413ade9029d3a300bd92",
+    "data/temp/finalest_severodvinsk_tobacco/evidence/egais.parquet": "928b1b7039e5a11e9a4af6c986f80801eae754fd95a418e5fbfc4f99f89527b1",
+    "data/temp/finalest_severodvinsk_tobacco/evidence/export_name.parquet": "d87d855695c9d005ba12f1c1910a9feddc43936b457f549b3107a0e287c20963",
+    "data/temp/finalest_severodvinsk_tobacco/evidence/foursquare.parquet": "64cd9cecb62b508f4935e6466df46469606d0cc3981c105130dd12ea909a45bb",
+    "data/temp/finalest_severodvinsk_tobacco/evidence/overture.parquet": "dea17e3b7acab0a9e925e49e723e15b200ef98823ef1e3dd4434a02d4c7c0709",
+    "data/temp/finalest_severodvinsk_tobacco/evidence/providers.parquet": "8ac964065596d9ac0416632d340922f2e8a70cb319ca03efccaed2075c41a8e3",
+    "data/temp/finalest_severodvinsk_tobacco/evidence/yandex.parquet": "55e74380bb5396948b85193fb52f5ac06264689476aa5055a465788d380b879f",
+    "data/raw/finalest/infrastructure_северодвинск_2026-10-31_yandex_2026-10-31_103334_алкоголь.xlsx": "f385dead17769b9fa8c82354395c08b4556bec8ad544636fd2b98ec53ee8721b",
+    "data/temp/finalest_severodvinsk_alcohol/objects.parquet": "c3b030500296df32a3e5d3bf1ef2fca9bc4dc74134cf29baa399ae5c1e9b2027",
+    "data/temp/finalest_severodvinsk_alcohol/rowmap.parquet": "fde0569df20eaf145a7ec18bfe6b7c3a17dea81b1873bc6cd055b0d6643d51c3",
+    "data/temp/finalest_severodvinsk_alcohol/evidence/egais.parquet": "f61c9aff5047aac89d6fd4c67201e59d3c82707cc5dd2551936f7e6bd7feb053",
+    "data/temp/finalest_severodvinsk_alcohol/evidence/export_name.parquet": "d636a4afab13a80d821bc49622debb76ca32dd9e198a748301c1e5803d7a26ae",
+    "data/temp/finalest_severodvinsk_alcohol/evidence/foursquare.parquet": "d88a4544f3d88fe4bf4feafb6be4260832613693a285ca0617ce34679794f050",
+    "data/temp/finalest_severodvinsk_alcohol/evidence/overture.parquet": "0bb654a399f152fb8084691d0a5c3392a2b981eded4517ec2e7bb4c6b3439601",
+    "data/temp/finalest_severodvinsk_alcohol/evidence/providers.parquet": "8d401957f54204256750bf86e32d406d93a28d3da2c1333c8a13248507ca91ce",
+    "data/temp/finalest_severodvinsk_alcohol/evidence/yandex.parquet": "5b884c4f3834f7ec307e2997403382f184be9a0312dbbd4a26db43d580cdb830",
+    "results/finalest/catering_objects.csv": "b808b8d381a158e9382aff486e64f13a0376880027e3b36458983bf300cf55cc",
+    "results/finalest/alcohol_objects.csv": "0c68a3d69a0d6127944418e19d2a0081ca413dac6229cb632cb2911e3136998d",
+    "results/finalest/tobacco_objects.csv": "5b54e5c4ea65e1147a34c6ad776a04ed8971bd9c1caa1c46fed9c875ab03e373"
+  },
+  "outputs": {
+    "packets_1.jsonl": "4fb343e805840cbccb10d0695d6a9039fe7893fa48c4c7db0e66def133256ead",
+    "packets_2.jsonl": "8f97abeb9f57eeab2fb0022d5f1f1945b89011e67722a08eb1b9144449ce5e2b",
+    "packets_3.jsonl": "09dac615b2d196205881e7c8d0447cfebd50750c3027adfb2f414075c5a0b40d",
+    "packets_4.jsonl": "f9bdc8a304cee9c635312cd5f792602e8df5707c5c197f3cc942794aaafa9189",
+    "judge_prompt.md": "1ea68c823bb29cbbbfba156b0359f758890b87b5bab0e7e39dd9def655aee975",
+    "decisions.csv": "c9527e00a0e573461f716da88f265b882e9b4b9d96c9de9bf09dd2bc978d4a2d",
+    "population.csv": "7ff55d8f0239cb2c534ee3e0d8135d57e9e48e06a2d8c33844d54a6666fa7c31"
+  }
+}

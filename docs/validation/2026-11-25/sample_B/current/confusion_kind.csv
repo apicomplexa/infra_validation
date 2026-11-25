@@ -1,0 +1,55 @@
+category,pipeline,auditor,weighted_N,sample_n
+alcohol,да,0.0,0.0,0
+alcohol,да,1.0,70.37593984962405,6
+alcohol,да,?,112.0,8
+alcohol,нет,0.0,0.0,0
+alcohol,нет,1.0,1.0,1
+alcohol,нет,?,0.0,0
+alcohol,автомат,0.0,0.0,0
+alcohol,автомат,1.0,0.0,0
+alcohol,автомат,?,0.0,0
+alcohol,противоречие,0.0,0.0,0
+alcohol,противоречие,1.0,0.0,0
+alcohol,противоречие,?,0.0,0
+alcohol,нет данных,0.0,18.0625,1
+alcohol,нет данных,1.0,26.848214285714285,2
+alcohol,нет данных,?,32.81191749427043,4
+alcohol,mixed,0.0,0.0,0
+alcohol,mixed,1.0,0.0,0
+alcohol,mixed,?,0.0,0
+catering,да,0.0,8.8,2
+catering,да,1.0,216.0529411764706,14
+catering,да,?,7.833333333333333,1
+catering,нет,0.0,27.404761904761905,3
+catering,нет,1.0,0.0,0
+catering,нет,?,0.0,0
+catering,автомат,0.0,0.0,0
+catering,автомат,1.0,0.0,0
+catering,автомат,?,0.0,0
+catering,противоречие,0.0,0.0,0
+catering,противоречие,1.0,0.0,0
+catering,противоречие,?,16.571428571428573,1
+catering,нет данных,0.0,6.5,1
+catering,нет данных,1.0,23.852272727272727,2
+catering,нет данных,?,3.3333333333333335,1
+catering,mixed,0.0,0.0,0
+catering,mixed,1.0,0.0,0
+catering,mixed,?,0.0,0
+tobacco,да,0.0,0.0,0
+tobacco,да,1.0,17.326923076923077,4
+tobacco,да,?,0.0,0
+tobacco,нет,0.0,1.0,1
+tobacco,нет,1.0,0.0,0
+tobacco,нет,?,0.0,0
+tobacco,автомат,0.0,0.0,0
+tobacco,автомат,1.0,0.0,0
+tobacco,автомат,?,0.0,0
+tobacco,противоречие,0.0,0.0,0
+tobacco,противоречие,1.0,0.0,0
+tobacco,противоречие,?,0.0,0
+tobacco,нет данных,0.0,0.0,0
+tobacco,нет данных,1.0,22.682692307692307,2
+tobacco,нет данных,?,50.77714932126697,6
+tobacco,mixed,0.0,0.0,0
+tobacco,mixed,1.0,0.0,0
+tobacco,mixed,?,0.0,0

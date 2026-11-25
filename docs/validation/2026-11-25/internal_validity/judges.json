@@ -1,0 +1,15 @@
+{
+ "judge1": [
+  "Судья 1 (gpt-6.2-sol)",
+  [
+   "judgments_gpt-6.2-sol.jsonl"
+  ]
+ ],
+ "judge2": [
+  "Судья 2 (gpt-6-luna)",
+  [
+   "judgments_gpt-6-luna.jsonl"
+  ]
+ ],
+ "_runner": "workflow/scripts/internal_validity_judge.sh: Codex CLI, codex exec -s read-only, reasoning effort high; each judge saw judge_prompt.md and one packet file only"
+}

@@ -1,0 +1,10 @@
+category,city,sample_n,E_yes,E_no,E_unclear
+alcohol,Архангельск,60,9,4,47
+alcohol,Новодвинск,35,7,2,26
+alcohol,Северодвинск,50,5,3,42
+catering,Архангельск,60,16,5,39
+catering,Новодвинск,35,3,6,26
+catering,Северодвинск,50,6,2,42
+tobacco,Архангельск,60,6,3,51
+tobacco,Новодвинск,35,2,2,31
+tobacco,Северодвинск,50,4,3,43

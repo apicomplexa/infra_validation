@@ -1,0 +1,436 @@
+﻿unit_id,category,city,stratum,ver_exists_sampled,ver_kind_sampled,confirmed_now,kind_now,in_base,why_not_in_base
+finalest_arkhangelsk_alcohol:981,alcohol,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_alcohol:482,alcohol,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_alcohol:714,alcohol,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_alcohol:900,alcohol,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_alcohol:167,alcohol,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_alcohol:1536,alcohol,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_alcohol:328,alcohol,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_alcohol:1124,alcohol,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_alcohol:31,alcohol,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_alcohol:1457,alcohol,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_alcohol:165,alcohol,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_alcohol:1123,alcohol,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_alcohol:725,alcohol,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_alcohol:552,alcohol,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_alcohol:402,alcohol,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_alcohol:278,alcohol,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_alcohol:1649,alcohol,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_alcohol:54,alcohol,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_alcohol:904,alcohol,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_alcohol:1021,alcohol,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_alcohol:1396,alcohol,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_alcohol:869,alcohol,Архангельск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_arkhangelsk_alcohol:1532,alcohol,Архангельск,S2,conf,противоречие,1,противоречие,1,
+finalest_arkhangelsk_alcohol:729,alcohol,Архангельск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_arkhangelsk_alcohol:794,alcohol,Архангельск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_arkhangelsk_alcohol:216,alcohol,Архангельск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_arkhangelsk_alcohol:144,alcohol,Архангельск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_arkhangelsk_alcohol:1105,alcohol,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_alcohol:674,alcohol,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_alcohol:103,alcohol,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_alcohol:1112,alcohol,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_alcohol:369,alcohol,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_alcohol:478,alcohol,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_alcohol:102,alcohol,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_alcohol:133,alcohol,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_alcohol:686,alcohol,Архангельск,S3,conf,нет данных,1,нет данных,0,Яндекс: больше не работает
+finalest_arkhangelsk_alcohol:354,alcohol,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_alcohol:314,alcohol,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_alcohol:485,alcohol,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_alcohol:483,alcohol,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_alcohol:1129,alcohol,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_alcohol:113,alcohol,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_alcohol:317,alcohol,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_alcohol:473,alcohol,Архангельск,S4,not,да,0,да,0,меньше двух источников
+finalest_arkhangelsk_alcohol:307,alcohol,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_alcohol:462,alcohol,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_alcohol:879,alcohol,Архангельск,S4,not,да,0,да,0,меньше двух источников
+finalest_arkhangelsk_alcohol:164,alcohol,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_alcohol:924,alcohol,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_alcohol:430,alcohol,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_alcohol:389,alcohol,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_alcohol:849,alcohol,Архангельск,S4,not,да,0,да,0,меньше двух источников
+finalest_arkhangelsk_alcohol:15,alcohol,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_alcohol:1115,alcohol,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_alcohol:283,alcohol,Архангельск,S4,not,да,0,да,0,меньше двух источников
+finalest_arkhangelsk_alcohol:208,alcohol,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_alcohol:168,alcohol,Архангельск,S4,not,да,0,да,0,меньше двух источников
+finalest_arkhangelsk_alcohol:196,alcohol,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_alcohol:468,alcohol,Архангельск,S4,not,да,0,да,0,меньше двух источников
+finalest_arkhangelsk_alcohol:1040,alcohol,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_catering:854,catering,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_catering:381,catering,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_catering:4,catering,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_catering:358,catering,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_catering:728,catering,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_catering:1087,catering,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_catering:860,catering,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_catering:232,catering,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_catering:255,catering,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_catering:60,catering,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_catering:81,catering,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_catering:270,catering,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_catering:369,catering,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_catering:605,catering,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_catering:53,catering,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_catering:834,catering,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_catering:582,catering,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_catering:478,catering,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_catering:275,catering,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_catering:189,catering,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_catering:261,catering,Архангельск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_arkhangelsk_catering:980,catering,Архангельск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_arkhangelsk_catering:158,catering,Архангельск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_arkhangelsk_catering:1120,catering,Архангельск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_arkhangelsk_catering:1126,catering,Архангельск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_arkhangelsk_catering:472,catering,Архангельск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_arkhangelsk_catering:921,catering,Архангельск,S2,conf,нет,1,противоречие,1,
+finalest_arkhangelsk_catering:579,catering,Архангельск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_arkhangelsk_catering:1031,catering,Архангельск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_arkhangelsk_catering:572,catering,Архангельск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_arkhangelsk_catering:182,catering,Архангельск,S2,conf,автомат,1,автомат,1,
+finalest_arkhangelsk_catering:299,catering,Архангельск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_arkhangelsk_catering:609,catering,Архангельск,S2,conf,автомат,1,автомат,1,
+finalest_arkhangelsk_catering:1007,catering,Архангельск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_arkhangelsk_catering:344,catering,Архангельск,S3,conf,нет данных,1,да,1,
+finalest_arkhangelsk_catering:808,catering,Архангельск,S3,conf,mixed,1,да,1,
+finalest_arkhangelsk_catering:272,catering,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_catering:385,catering,Архангельск,S3,conf,mixed,1,да,1,
+finalest_arkhangelsk_catering:206,catering,Архангельск,S3,conf,mixed,1,да,0,Яндекс: больше не работает
+finalest_arkhangelsk_catering:640,catering,Архангельск,S3,conf,нет данных,1,да,1,
+finalest_arkhangelsk_catering:703,catering,Архангельск,S3,conf,mixed,1,да,1,
+finalest_arkhangelsk_catering:211,catering,Архангельск,S3,conf,нет данных,1,да,1,
+finalest_arkhangelsk_catering:329,catering,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_catering:704,catering,Архангельск,S3,conf,mixed,1,да,1,
+finalest_arkhangelsk_catering:695,catering,Архангельск,S4,not,да,0,да,0,меньше двух источников
+finalest_arkhangelsk_catering:1106,catering,Архангельск,S4,not,нет,0,нет,0,меньше двух источников
+finalest_arkhangelsk_catering:590,catering,Архангельск,S4,not,нет,0,нет,0,меньше двух источников
+finalest_arkhangelsk_catering:639,catering,Архангельск,S4,not,да,0,да,0,меньше двух источников
+finalest_arkhangelsk_catering:575,catering,Архангельск,S4,not,да,0,да,0,меньше двух источников
+finalest_arkhangelsk_catering:624,catering,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_catering:618,catering,Архангельск,S4,not,да,0,да,0,меньше двух источников
+finalest_arkhangelsk_catering:625,catering,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_catering:567,catering,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_catering:562,catering,Архангельск,S4,not,да,0,да,0,меньше двух источников
+finalest_arkhangelsk_catering:509,catering,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_catering:594,catering,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_catering:115,catering,Архангельск,S4,not,нет,0,нет,0,меньше двух источников
+finalest_arkhangelsk_catering:322,catering,Архангельск,S4,not,да,0,да,0,меньше двух источников
+finalest_arkhangelsk_catering:335,catering,Архангельск,S4,not,нет,0,нет,0,меньше двух источников
+finalest_arkhangelsk_catering:539,catering,Архангельск,S4,not,да,0,да,0,меньше двух источников
+finalest_arkhangelsk_tobacco:23,tobacco,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_tobacco:66,tobacco,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_tobacco:45,tobacco,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_tobacco:8,tobacco,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_tobacco:49,tobacco,Архангельск,S1,conf,да,0,да,0,меньше двух источников
+finalest_arkhangelsk_tobacco:43,tobacco,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_tobacco:10,tobacco,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_tobacco:27,tobacco,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_tobacco:76,tobacco,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_tobacco:64,tobacco,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_tobacco:1,tobacco,Архангельск,S1,conf,да,1,да,1,
+finalest_arkhangelsk_tobacco:13,tobacco,Архангельск,S1,conf,да,0,да,0,меньше двух источников
+finalest_arkhangelsk_tobacco:339,tobacco,Архангельск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_arkhangelsk_tobacco:411,tobacco,Архангельск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_arkhangelsk_tobacco:422,tobacco,Архангельск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_arkhangelsk_tobacco:507,tobacco,Архангельск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_arkhangelsk_tobacco:434,tobacco,Архангельск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_arkhangelsk_tobacco:273,tobacco,Архангельск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_arkhangelsk_tobacco:582,tobacco,Архангельск,S3,conf,нет данных,1,нет данных,0,Яндекс: больше не работает
+finalest_arkhangelsk_tobacco:429,tobacco,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_tobacco:548,tobacco,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_tobacco:454,tobacco,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_tobacco:333,tobacco,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_tobacco:466,tobacco,Архангельск,S3,conf,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_tobacco:522,tobacco,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_tobacco:199,tobacco,Архангельск,S3,conf,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_tobacco:325,tobacco,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_tobacco:435,tobacco,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_tobacco:187,tobacco,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_tobacco:575,tobacco,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_tobacco:403,tobacco,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_tobacco:414,tobacco,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_tobacco:55,tobacco,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_tobacco:239,tobacco,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_tobacco:464,tobacco,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_tobacco:251,tobacco,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_tobacco:561,tobacco,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_tobacco:174,tobacco,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_tobacco:283,tobacco,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_tobacco:645,tobacco,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_tobacco:110,tobacco,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_tobacco:141,tobacco,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_tobacco:220,tobacco,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_tobacco:255,tobacco,Архангельск,S3,conf,нет данных,1,нет данных,1,
+finalest_arkhangelsk_tobacco:101,tobacco,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_tobacco:673,tobacco,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_tobacco:432,tobacco,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_tobacco:224,tobacco,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_tobacco:547,tobacco,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_tobacco:445,tobacco,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_tobacco:649,tobacco,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_tobacco:280,tobacco,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_tobacco:19,tobacco,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_tobacco:623,tobacco,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_tobacco:275,tobacco,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_tobacco:301,tobacco,Архангельск,S4,not,нет данных,1,нет данных,1,
+finalest_arkhangelsk_tobacco:409,tobacco,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_tobacco:60,tobacco,Архангельск,S4,not,да,0,да,0,меньше двух источников
+finalest_arkhangelsk_tobacco:134,tobacco,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_arkhangelsk_tobacco:426,tobacco,Архангельск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_novodvinsk_alcohol:50,alcohol,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_alcohol:44,alcohol,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_alcohol:11,alcohol,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_alcohol:27,alcohol,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_alcohol:114,alcohol,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_alcohol:113,alcohol,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_alcohol:12,alcohol,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_alcohol:115,alcohol,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_alcohol:69,alcohol,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_alcohol:13,alcohol,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_alcohol:41,alcohol,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_alcohol:70,alcohol,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_alcohol:99,alcohol,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_alcohol:116,alcohol,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_alcohol:107,alcohol,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_alcohol:87,alcohol,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_alcohol:67,alcohol,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_alcohol:31,alcohol,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_alcohol:86,alcohol,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_alcohol:85,alcohol,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_alcohol:112,alcohol,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_alcohol:57,alcohol,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_alcohol:0,alcohol,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_alcohol:25,alcohol,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_alcohol:7,alcohol,Новодвинск,S4,not,да,0,да,0,меньше двух источников
+finalest_novodvinsk_alcohol:104,alcohol,Новодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_novodvinsk_alcohol:26,alcohol,Новодвинск,S4,not,да,0,да,0,меньше двух источников
+finalest_novodvinsk_alcohol:1,alcohol,Новодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_novodvinsk_alcohol:40,alcohol,Новодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_novodvinsk_alcohol:62,alcohol,Новодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_novodvinsk_alcohol:75,alcohol,Новодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_novodvinsk_alcohol:5,alcohol,Новодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_novodvinsk_alcohol:102,alcohol,Новодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_novodvinsk_alcohol:34,alcohol,Новодвинск,S4,not,да,0,да,0,меньше двух источников
+finalest_novodvinsk_alcohol:100,alcohol,Новодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_novodvinsk_catering:59,catering,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_catering:35,catering,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_catering:13,catering,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_catering:62,catering,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_catering:49,catering,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_catering:61,catering,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_catering:55,catering,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_catering:11,catering,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_catering:66,catering,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_catering:42,catering,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_catering:48,catering,Новодвинск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_novodvinsk_catering:77,catering,Новодвинск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_novodvinsk_catering:71,catering,Новодвинск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_novodvinsk_catering:2,catering,Новодвинск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_novodvinsk_catering:72,catering,Новодвинск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_novodvinsk_catering:46,catering,Новодвинск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_novodvinsk_catering:78,catering,Новодвинск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_novodvinsk_catering:52,catering,Новодвинск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_novodvinsk_catering:14,catering,Новодвинск,S3,conf,нет данных,1,нет,0,вид «нет»
+finalest_novodvinsk_catering:60,catering,Новодвинск,S3,conf,нет данных,1,да,1,
+finalest_novodvinsk_catering:40,catering,Новодвинск,S3,conf,нет данных,1,да,1,
+finalest_novodvinsk_catering:30,catering,Новодвинск,S3,conf,mixed,1,да,1,
+finalest_novodvinsk_catering:38,catering,Новодвинск,S3,conf,нет данных,1,нет,0,вид «нет»
+finalest_novodvinsk_catering:28,catering,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_catering:34,catering,Новодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_novodvinsk_catering:20,catering,Новодвинск,S4,not,автомат,0,автомат,0,меньше двух источников
+finalest_novodvinsk_catering:18,catering,Новодвинск,S4,not,да,0,да,0,меньше двух источников
+finalest_novodvinsk_catering:21,catering,Новодвинск,S4,not,автомат,0,автомат,0,меньше двух источников
+finalest_novodvinsk_catering:54,catering,Новодвинск,S4,not,да,0,да,0,меньше двух источников
+finalest_novodvinsk_catering:47,catering,Новодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_novodvinsk_catering:26,catering,Новодвинск,S4,not,да,0,да,0,меньше двух источников
+finalest_novodvinsk_catering:75,catering,Новодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_novodvinsk_catering:10,catering,Новодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_novodvinsk_catering:45,catering,Новодвинск,S4,not,да,0,да,0,меньше двух источников
+finalest_novodvinsk_catering:58,catering,Новодвинск,S4,not,да,0,да,0,меньше двух источников
+finalest_novodvinsk_tobacco:3,tobacco,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_tobacco:2,tobacco,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_tobacco:85,tobacco,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_tobacco:1,tobacco,Новодвинск,S1,conf,да,1,да,1,
+finalest_novodvinsk_tobacco:22,tobacco,Новодвинск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_novodvinsk_tobacco:61,tobacco,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_tobacco:18,tobacco,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_tobacco:29,tobacco,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_tobacco:75,tobacco,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_tobacco:32,tobacco,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_tobacco:67,tobacco,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_tobacco:28,tobacco,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_tobacco:68,tobacco,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_tobacco:51,tobacco,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_tobacco:38,tobacco,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_tobacco:16,tobacco,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_tobacco:71,tobacco,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_tobacco:58,tobacco,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_tobacco:25,tobacco,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_tobacco:40,tobacco,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_tobacco:31,tobacco,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_tobacco:36,tobacco,Новодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_novodvinsk_tobacco:21,tobacco,Новодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_novodvinsk_tobacco:62,tobacco,Новодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_novodvinsk_tobacco:15,tobacco,Новодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_novodvinsk_tobacco:6,tobacco,Новодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_novodvinsk_tobacco:10,tobacco,Новодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_novodvinsk_tobacco:64,tobacco,Новодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_novodvinsk_tobacco:0,tobacco,Новодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_novodvinsk_tobacco:33,tobacco,Новодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_novodvinsk_tobacco:14,tobacco,Новодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_novodvinsk_tobacco:52,tobacco,Новодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_novodvinsk_tobacco:78,tobacco,Новодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_novodvinsk_tobacco:63,tobacco,Новодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_novodvinsk_tobacco:13,tobacco,Новодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_alcohol:456,alcohol,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_alcohol:24,alcohol,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_alcohol:424,alcohol,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_alcohol:192,alcohol,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_alcohol:408,alcohol,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_alcohol:239,alcohol,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_alcohol:64,alcohol,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_alcohol:584,alcohol,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_alcohol:128,alcohol,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_alcohol:378,alcohol,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_alcohol:514,alcohol,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_alcohol:61,alcohol,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_alcohol:354,alcohol,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_alcohol:44,alcohol,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_alcohol:486,alcohol,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_alcohol:115,alcohol,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_alcohol:51,alcohol,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_alcohol:113,alcohol,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_alcohol:662,alcohol,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_alcohol:555,alcohol,Северодвинск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_severodvinsk_alcohol:161,alcohol,Северодвинск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_severodvinsk_alcohol:93,alcohol,Северодвинск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_severodvinsk_alcohol:182,alcohol,Северодвинск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_severodvinsk_alcohol:94,alcohol,Северодвинск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_severodvinsk_alcohol:158,alcohol,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_alcohol:43,alcohol,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_alcohol:20,alcohol,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_alcohol:225,alcohol,Северодвинск,S3,conf,mixed,1,да,1,
+finalest_severodvinsk_alcohol:74,alcohol,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_alcohol:199,alcohol,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_alcohol:371,alcohol,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_alcohol:210,alcohol,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_alcohol:571,alcohol,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_alcohol:314,alcohol,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_alcohol:583,alcohol,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_alcohol:454,alcohol,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_alcohol:226,alcohol,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_alcohol:310,alcohol,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_alcohol:143,alcohol,Северодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_alcohol:397,alcohol,Северодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_alcohol:204,alcohol,Северодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_alcohol:132,alcohol,Северодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_alcohol:37,alcohol,Северодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_alcohol:97,alcohol,Северодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_alcohol:123,alcohol,Северодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_alcohol:455,alcohol,Северодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_alcohol:15,alcohol,Северодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_alcohol:518,alcohol,Северодвинск,S4,not,нет,0,нет,0,меньше двух источников
+finalest_severodvinsk_alcohol:1,alcohol,Северодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_alcohol:114,alcohol,Северодвинск,S4,not,да,0,да,0,меньше двух источников
+finalest_severodvinsk_catering:101,catering,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_catering:258,catering,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_catering:401,catering,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_catering:406,catering,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_catering:111,catering,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_catering:117,catering,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_catering:269,catering,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_catering:187,catering,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_catering:248,catering,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_catering:116,catering,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_catering:83,catering,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_catering:380,catering,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_catering:361,catering,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_catering:317,catering,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_catering:199,catering,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_catering:100,catering,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_catering:203,catering,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_catering:70,catering,Северодвинск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_severodvinsk_catering:412,catering,Северодвинск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_severodvinsk_catering:221,catering,Северодвинск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_severodvinsk_catering:431,catering,Северодвинск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_severodvinsk_catering:128,catering,Северодвинск,S2,conf,автомат,1,автомат,0,Яндекс: больше не работает
+finalest_severodvinsk_catering:170,catering,Северодвинск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_severodvinsk_catering:146,catering,Северодвинск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_severodvinsk_catering:407,catering,Северодвинск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_severodvinsk_catering:219,catering,Северодвинск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_severodvinsk_catering:129,catering,Северодвинск,S2,conf,автомат,1,автомат,1,
+finalest_severodvinsk_catering:403,catering,Северодвинск,S2,conf,нет,1,нет,0,вид «нет»
+finalest_severodvinsk_catering:18,catering,Северодвинск,S2,conf,автомат,1,автомат,1,
+finalest_severodvinsk_catering:163,catering,Северодвинск,S3,conf,mixed,1,да,1,
+finalest_severodvinsk_catering:237,catering,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_catering:243,catering,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_catering:172,catering,Северодвинск,S3,conf,mixed,1,да,1,
+finalest_severodvinsk_catering:229,catering,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_catering:20,catering,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_catering:96,catering,Северодвинск,S3,conf,нет данных,1,да,1,
+finalest_severodvinsk_catering:149,catering,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_catering:453,catering,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_catering:136,catering,Северодвинск,S4,not,автомат,0,автомат,0,меньше двух источников
+finalest_severodvinsk_catering:112,catering,Северодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_catering:227,catering,Северодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_catering:66,catering,Северодвинск,S4,not,автомат,0,автомат,0,меньше двух источников
+finalest_severodvinsk_catering:38,catering,Северодвинск,S4,not,автомат,0,автомат,0,меньше двух источников
+finalest_severodvinsk_catering:8,catering,Северодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_catering:442,catering,Северодвинск,S4,not,нет,0,нет,0,меньше двух источников
+finalest_severodvinsk_catering:275,catering,Северодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_catering:439,catering,Северодвинск,S4,not,нет,0,нет,0,меньше двух источников
+finalest_severodvinsk_catering:335,catering,Северодвинск,S4,not,да,0,да,0,меньше двух источников
+finalest_severodvinsk_catering:267,catering,Северодвинск,S4,not,да,0,да,0,меньше двух источников
+finalest_severodvinsk_catering:131,catering,Северодвинск,S4,not,автомат,0,автомат,0,меньше двух источников
+finalest_severodvinsk_tobacco:40,tobacco,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_tobacco:12,tobacco,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_tobacco:9,tobacco,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_tobacco:4,tobacco,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_tobacco:5,tobacco,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_tobacco:25,tobacco,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_tobacco:42,tobacco,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_tobacco:2,tobacco,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_tobacco:36,tobacco,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_tobacco:27,tobacco,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_tobacco:30,tobacco,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_tobacco:22,tobacco,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_tobacco:24,tobacco,Северодвинск,S1,conf,да,1,да,1,
+finalest_severodvinsk_tobacco:166,tobacco,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_tobacco:188,tobacco,Северодвинск,S3,conf,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_tobacco:244,tobacco,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_tobacco:222,tobacco,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_tobacco:164,tobacco,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_tobacco:133,tobacco,Северодвинск,S3,conf,нет данных,1,нет данных,0,Яндекс: больше не работает
+finalest_severodvinsk_tobacco:134,tobacco,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_tobacco:211,tobacco,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_tobacco:110,tobacco,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_tobacco:125,tobacco,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_tobacco:59,tobacco,Северодвинск,S3,conf,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_tobacco:107,tobacco,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_tobacco:114,tobacco,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_tobacco:260,tobacco,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_tobacco:135,tobacco,Северодвинск,S3,conf,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_tobacco:209,tobacco,Северодвинск,S3,conf,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_tobacco:106,tobacco,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_tobacco:237,tobacco,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_tobacco:84,tobacco,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_tobacco:213,tobacco,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_tobacco:198,tobacco,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_tobacco:13,tobacco,Северодвинск,S3,conf,нет данных,1,да,1,
+finalest_severodvinsk_tobacco:146,tobacco,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_tobacco:249,tobacco,Северодвинск,S3,conf,нет данных,1,нет данных,1,
+finalest_severodvinsk_tobacco:118,tobacco,Северодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_tobacco:251,tobacco,Северодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_tobacco:98,tobacco,Северодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_tobacco:179,tobacco,Северодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_tobacco:52,tobacco,Северодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_tobacco:35,tobacco,Северодвинск,S4,not,да,0,да,0,меньше двух источников
+finalest_severodvinsk_tobacco:231,tobacco,Северодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_tobacco:116,tobacco,Северодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_tobacco:186,tobacco,Северодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_tobacco:109,tobacco,Северодвинск,S4,not,нет,0,нет,0,меньше двух источников
+finalest_severodvinsk_tobacco:169,tobacco,Северодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_tobacco:185,tobacco,Северодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников
+finalest_severodvinsk_tobacco:113,tobacco,Северодвинск,S4,not,нет данных,0,нет данных,0,меньше двух источников

@@ -132,8 +132,9 @@ def _run(config: dict, d: pd.Series, register: Path, out: Path) -> tuple[pd.Data
 
 
 @pytest.fixture(scope="module")
-def built(golden, tmp_path_factory):
+def built(golden, tmp_path_factory, archive_final_cache):
     config = yaml.safe_load((ROOT / "config" / "config.yaml").read_text(encoding="utf-8"))
+    config["resources"]["yandex_cache"]["final"] = str(archive_final_cache)
     deliveries = pd.read_csv(ROOT / "config" / "deliveries.tsv", sep="	", dtype=str)
     deliveries = deliveries[deliveries["category"] == catering.NAME]
     out = tmp_path_factory.mktemp("catering")

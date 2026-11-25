@@ -18,7 +18,6 @@ from infracheck.checks import arkh_admin, providers, yandex
 from infracheck.inputs import final_xlsx
 
 ROOT = Path(__file__).resolve().parents[2]
-CACHE = ROOT / "resources" / "cache" / "yandex" / "final_yandex_cache.jsonl"
 
 COLUMNS = ["city", "name", "address", "lat", "lon", "site_key", "n_rows", "types",
            "osm", "gis", "arkh_admin", "ya_contractor", "ya_contractor_raw",
@@ -37,10 +36,10 @@ def as_text(df: pd.DataFrame) -> pd.DataFrame:
 
 
 @pytest.fixture(scope="module")
-def built(golden):
+def built(golden, archive_final_cache):
     deliveries = pd.read_csv(ROOT / "config" / "deliveries.tsv", sep="\t", dtype=str)
     deliveries = deliveries[deliveries["format"] == "final_xlsx"]
-    cache = yandex.load_cache(CACHE)
+    cache = yandex.load_cache(archive_final_cache)
     parts = []
     for _, d in deliveries.iterrows():
         ob, rowmap, raw = final_xlsx.load(ROOT / d["path"], d["delivery"], d["yandex_region"], d["category"])

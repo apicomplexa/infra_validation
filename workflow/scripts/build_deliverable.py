@@ -19,9 +19,11 @@ import argparse
 import datetime as dt
 import hashlib
 import importlib.util
+import json
 import re
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -31,8 +33,12 @@ ROOT = Path(__file__).resolve().parents[2]
 FINALEST = ROOT / "results" / "finalest"
 OUT = FINALEST / "deliverable"
 METHODOLOGY = ROOT / "docs" / "methodology_finalest.md"
-MERGE_REVIEW = ROOT / "results" / "finalest" / "calibration" / "diagnostics" / "osm_gis_merge.csv"
-IV_EVAL = ROOT / "results" / "finalest" / "internal_validity" / "eval"
+CAL = ROOT / "results" / "finalest" / "calibration"
+# The internal-validity sample drawn from the current run (Yandex rules of 2026-11-24 included);
+# the first one (`internal_validity/`, run of 2026-11-22) stays as history.
+IV = ROOT / "results" / "finalest" / "internal_validity_v2"
+IV_EVAL = IV / "eval"
+REPORT = ROOT / "workflow" / "scripts" / "report_docx.py"
 DELIVERIES = ROOT / "config" / "deliveries_finalest.tsv"
 UNIFIED_BASE = ROOT / "workflow" / "scripts" / "unified_base.py"
 BASE_DIR = "база"
@@ -512,29 +518,7 @@ def readme(table: pd.DataFrame, deliveries: list[Delivery], head: str) -> str:
 |---|---|---:|---:|---:|
 {chr(10).join(since)}
 
-Метрики валидации ниже и в `methodology.md` (§8, §9) посчитаны на конфигурации 22.11 и
-с этими правилами не пересчитывались.
-
-## Метрики валидации
-
-Доля «Подтверждено» описывает работу правила, а не его точность. Итоговые метрики на выборке B
-(435 объектов, по 145 на категорию) — в разделе 8 `methodology.md`. Коротко:
-
-- эталон — аудитор-языковая модель по строгому правилу силы метки (§5.3). Он разрешил существование
-  только у 88 из 435 объектов (20 %): для большинства объектов открытый веб не даёт независимого
-  датированного свидетельства. Неясных больше 20 % во всех категориях, поэтому результат — границы:
-  точность «Подтверждено» 0,21 – 0,97 (алкоголь), 0,26 – 0,93 (общепит), 0,12 – 0,95 (табак);
-- вторично, по разрешённым меткам: точность 0,84 / 0,77 / 0,74 с интервалами шириной 38–56 п. п. Это
-  объекты с заметным свежим следом в сети, а не вся поставка;
-- полнота без ручной проверки не идентифицируема (границы 0,39 – 1,00, 0,40 – 0,97, 0,29 – 1,00);
-- точность вида «да» в общепите 0,96 [0,82; 1,00] на 12 опознанных объектах; для алкоголя и табака
-  данных недостаточно;
-- ручная проверка аудитора человеком не выполнена, поэтому все числа условны относительно аудитора.
-  Числа калибровочной выборки A (§6) — разведочные, качеством поставки не являются;
-- эскалации к более сильной модели на B не было: 361 неясный объект переспрошен той же `gpt-6-luna`
-  по инструкции версии 3 (столбец `escalated` отмечает переспрос, а не смену модели; §8.1);
-- правило объединения страт для дисперсии расширено после вскрытия B (оценщик падал на стратах с одной
-  разрешённой меткой). Оно меняет только ДИ, не точечные оценки и не границы неясности (§8.7).
+{validation_md()}
 """
 
 
@@ -567,6 +551,70 @@ def iv_cell(m: pd.DataFrame, source: str, metric: str) -> str:
             f"(границы {iv_pct(r['bound_lo'])}–{iv_pct(r['bound_hi'])} %)")
 
 
+def _load(path: Path):
+    spec = importlib.util.spec_from_file_location(path.stem, path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[path.stem] = mod  # dataclasses look their module up there
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def ext_metric(variant: str, cat: str, metric: str, analysis: str = "main") -> pd.Series:
+    m = pd.read_csv(CAL / variant / "metrics.csv")
+    return m[(m["category"] == cat) & (m["metric"] == metric) & (m["analysis"] == analysis)].iloc[0]
+
+
+def dec2(x: float) -> str:
+    return f"{x:.2f}".replace(".", ",")
+
+
+def validation_md() -> str:
+    """Sample-B metrics of the current verdicts and of the base (`pixi run calibration-current`), read, not typed."""
+    for variant in ("base", "current"):
+        if not (CAL / variant / "metrics.csv").exists():
+            raise SystemExit(f"{rel(CAL / variant / 'metrics.csv')} is missing: run `pixi run calibration-current`")
+    flags = pd.read_csv(CAL / "base" / "label_flags.csv")
+    n_b, resolved = len(flags), int(flags["E"].notna().sum())
+    cats = [("catering", "общепит"), ("alcohol", "алкоголь"), ("tobacco", "табак")]
+
+    def cell(variant, metric, c):
+        r = ext_metric(variant, c, metric)
+        return (f"{dec2(r['estimate'])} [{dec2(r['low'])}; {dec2(r['high'])}]",
+                f"{dec2(r['unclear_low'])} – {dec2(r['unclear_high'])}")
+
+    rows = []
+    for metric, variant, label in (("PPV existence", "base", "Объект базы существует"),
+                                   ("PPV existence", "current", "Подтверждённый объект существует"),
+                                   ("sensitivity existence", "current", "Полнота подтверждения")):
+        for c, ru in cats:
+            point, bounds = cell(variant, metric, c)
+            rows.append(f"| {label} | {ru} | **{bounds}** | {point} |")
+    kind = ext_metric("current", "catering", "category precision yes")
+    return f"""Метрики ниже посчитаны на **текущих** вердиктах и на самой базе (`pixi run calibration-current`).
+
+## Метрики валидации
+
+Доля «Подтверждено» описывает работу правила, а не его точность. Точность оценена на выборке B
+({n_b} объектов, по 145 на категорию): аудитор-языковая модель по строгому правилу силы метки
+(methodology.md, §5.3) ставил каждому объекту «существует / нет / неясно». Метки описывают сам объект
+и от правил конвейера не зависят, поэтому они применены к текущей базе без новых запросов, с прежними
+весами выборки (methodology.md, §8). Существование разрешено у {resolved} из {n_b} объектов
+({100 * resolved / n_b:.0f} %): для остальных открытый веб не даёт независимого датированного
+свидетельства. Неясных больше 20 % во всех категориях, поэтому заголовок — **границы неясности**
+(все неясные против конвейера / в его пользу), точечная оценка по разрешённым — вторична.
+
+| Показатель | Категория | Границы неясности | По разрешённым [95 % ДИ] |
+|---|---|---|---|
+{chr(10).join(rows)}
+
+- «Объект базы существует» — доля существующих среди объектов с «В базу» = 1 (подтверждено, вид не «нет»,
+  не закрыт по Яндексу);
+- точность вида «да» в общепите {dec2(kind['estimate'])} [{dec2(kind['low'])}; {dec2(kind['high'])}];
+  для алкоголя и табака данных недостаточно;
+- ручная проверка аудитора человеком не выполнена, поэтому все числа условны относительно аудитора.
+"""
+
+
 def internal_validity_md(eval_dir: Path = IV_EVAL) -> str:
     """README block from `pixi run internal-validity`; numbers are read, never typed in."""
     path = eval_dir / "metrics.csv"
@@ -574,6 +622,9 @@ def internal_validity_md(eval_dir: Path = IV_EVAL) -> str:
         raise SystemExit(f"{rel(path)} is missing: run `pixi run internal-validity` first")
     m = pd.read_csv(path, encoding="utf-8-sig")
     ag = pd.read_csv(eval_dir / "agreement.csv", encoding="utf-8-sig")
+    manifest = json.loads((eval_dir.parent / "manifest.json").read_text(encoding="utf-8"))
+    judges = json.loads((eval_dir.parent / "judges.json").read_text(encoding="utf-8"))
+    who = ", ".join(v[0].split("(")[1].rstrip(")") for k, v in judges.items() if not k.startswith("_"))
     kappa = ag[(ag["source"] == "all") & (ag["question"] == "same_org")]["kappa"].iloc[0]
     kappa = f"{kappa:.2f}".replace(".", ",")
     rows = "\n".join(f"| {label} | {iv_cell(m, src, 'false_accept')} | {iv_cell(m, src, 'false_reject')} |"
@@ -589,9 +640,10 @@ def internal_validity_md(eval_dir: Path = IV_EVAL) -> str:
 подрядчика). **Внешняя достоверность** — существует ли объект на самом деле (§8, раздел выше). Первое
 не доказывает второго: верно сопоставленная устаревшая карточка остаётся устаревшей.
 
-Оценка: 260 решений «объект ↔ запись» в 22 стратах, два слепых судьи-LLM разных моделей (Sonnet,
-Opus), только по данным пакета; эталон — совпавшие ответы, остальное входит в границы. Веса — популяция
-решений страты / выборка. 95 % ДИ — Уилсон по эффективному объёму. Разведочно, без поправки на
+Оценка: {manifest['n_decisions']} решений «объект ↔ запись» в {len(manifest['strata'])} стратах, отобранных из
+текущего прогона, два слепых судьи-LLM разных моделей ({who}), только по данным пакета; эталон —
+совпавшие ответы, остальное входит в границы. Веса — популяция решений страты / выборка.
+95 % ДИ — Уилсон по эффективному объёму. Разведочно, без поправки на
 множественность (methodology.md, §9).
 
 {head}
@@ -609,6 +661,69 @@ Opus), только по данным пакета; эталон — совпа�
 лучшем отвергнутом кандидате в радиусе проверки, отказы по расстоянию в оценку не входят; часть
 решений ЕГАИС требует знать, какое юрлицо держит вывеску, и осталась неясной.
 """
+
+
+def merge_review(deliveries: list[Delivery], base: pd.DataFrame) -> pd.DataFrame:
+    """Confirmed objects whose contractor merged an OSM and a 2GIS record of unlike names.
+
+    Read from each workbook's `quality` sheet (joined through `original_data`, as the
+    inputs do) and the current base, so the list always matches the base it ships with.
+    Unlike: the two least alike names of the merge score below `NAME_MIN` (both ways).
+    A review list, never a filter: an operator and its fascia also differ by name.
+    """
+    from infracheck.core.names import NAME_MIN, similar
+
+    b = base.set_index("ID")
+    out = []
+    for d in deliveries:
+        wb = pd.read_excel(d.workbook, sheet_name="data", usecols=["Объект (склеен)"])
+        raw = ROOT / pd.read_csv(DELIVERIES, sep="\t").set_index("delivery").loc[d.delivery, "path"]
+        orig = pd.read_excel(raw, sheet_name="original_data")
+        qual = pd.read_excel(raw, sheet_name="quality")
+        key = ["type_orig", "name_orig", "adress_orig", "latitude", "longitude"]
+        q = orig[key].merge(qual[key + ["providers", "original_names"]], on=key, how="left", validate="1:1")
+        if len(q) != len(wb):
+            raise RuntimeError(f"{d.workbook.name}: quality join has {len(q)} rows, data has {len(wb)}")
+        q["merged"] = wb["Объект (склеен)"].to_numpy()
+        prov = q["providers"].fillna("")
+        both = q[prov.str.contains("osm") & prov.str.contains("2gis")]
+        for merged, g in both.groupby("merged", sort=True):
+            uid = f"{d.delivery}:{int(merged)}"
+            r = b.loc[uid]
+            if int(r["Подтверждено"]) != 1:
+                continue
+            names = list(dict.fromkeys(t.strip() for v in g["original_names"].fillna("")
+                                       for t in str(v).split("; ") if t.strip()))
+            # The rule of the internal-validity stratum `merge_unlike_names` (whose error rate the
+            # report quotes): the object's own name against each other name of the merge.
+            own = str(r["Название"])
+            others = [x for x in names if x != own] or names[1:]
+            if not others:
+                continue
+            low = min(max(similar(own, c), similar(c, own)) for c in others)
+            if low >= NAME_MIN:
+                continue
+            out.append({"ID": uid, "Город": r["Город"], "Вид объекта": r["Вид объекта"], "Название": r["Название"],
+                        "Адрес": r["Адрес"], "Названия в склейке": " | ".join(names),
+                        "Сходство названий": round(low, 1),
+                        "Только OSM + 2GIS": int(r["Источников"] == 2 and r["OSM"] == 1 and r["GIS"] == 1),
+                        "Источников": int(r["Источников"]), "В базу": int(r["В базу"])})
+    df = pd.DataFrame(out)
+    return df.sort_values(["Только OSM + 2GIS", "Вид объекта", "Город", "Сходство названий"],
+                          ascending=[False, True, True, True]).reset_index(drop=True)
+
+
+def check_metrics_fresh(base: pd.DataFrame) -> None:
+    """The sample-B metrics must have been computed on this very base (`calibration_current.py`)."""
+    path = CAL / "verdicts_now.csv"
+    if not path.exists():
+        raise SystemExit(f"{rel(path)} is missing: run `pixi run calibration-current`")
+    v = pd.read_csv(path, encoding="utf-8-sig").set_index("unit_id")
+    b = base.set_index("ID").loc[v.index]
+    stale = (b["В базу"].astype(int) != v["in_base"]) | (b["Подтверждено"].astype(int) != v["confirmed_now"])
+    if stale.any():
+        raise SystemExit(f"sample-B metrics are stale for {int(stale.sum())} units (e.g. {stale[stale].index[0]}): "
+                         "run `pixi run calibration-current`")
 
 
 def build_base(folder: Path, stamp: str) -> pd.DataFrame:
@@ -689,22 +804,31 @@ def main(argv: list[str] | None = None) -> None:
     write_xlsx(out / "сводка.xlsx", table, weak, provenance)
     (out / "сводка.md").write_text(summary_md(table, weak, provenance, head), encoding="utf-8")
     shutil.copy2(METHODOLOGY, out / "methodology.md")
+    stages = build_base(out / BASE_DIR, args.stamp)
+    base = pd.read_excel(out / BASE_DIR / BASE_TABLE, sheet_name="База")
+    check_metrics_fresh(base)
     text = readme(table, deliveries, head) + internal_validity_md()
-    if MERGE_REVIEW.exists():
-        # Contractor OSM+2GIS merges whose names disagree: a review list, never a filter.
-        merge = pd.read_csv(MERGE_REVIEW, encoding="utf-8-sig")
-        merge = merge[merge["low"]].sort_values(["only_osm_gis", "cat", "city"], ascending=[False, True, True])
-        merge.to_excel(out / "к_проверке_склейки_OSM_2GIS.xlsx", index=False)
-        text += (
-            "\n## Список к проверке: склейки OSM + 2GIS с несхожими именами\n\n"
-            f"`к_проверке_склейки_OSM_2GIS.xlsx` — {len(merge)} подтверждённых объектов, у которых подрядчик "
-            "склеил запись OSM и запись 2GIS с несхожими именами (сходство < 72). "
-            f"{int(merge['only_osm_gis'].sum())} из них подтверждены только этими двумя флагами "
-            "(`only_osm_gis = True`, они в начале списка) — такие подтверждения могут быть ложными "
-            "(два заведения в одном доме). Низкое сходство не доказывает ошибку (оператор и вывеска "
-            "одной сети), поэтому это список для проверки, а не исключение. Подробно — methodology.md §7, п. 9.\n"
-        )
-    text += base_md(build_base(out / BASE_DIR, args.stamp), args.stamp)
+    # Contractor OSM+2GIS merges whose names disagree: a review list, never a filter.
+    merge = merge_review(deliveries, base)
+    merge.to_excel(out / "к_проверке_склейки_OSM_2GIS.xlsx", index=False)
+    text += (
+        "\n## Список к проверке: склейки OSM + 2GIS с несхожими именами\n\n"
+        "`к_проверке_склейки_OSM_2GIS.xlsx` — подтверждённые объекты, у которых подрядчик склеил запись OSM "
+        f"и запись 2GIS с несхожими именами (сходство имени объекта с другим именем склейки < 72): {len(merge)}. "
+        f"{int(merge['Только OSM + 2GIS'].sum())} из них подтверждены только этими двумя флагами "
+        "(«Только OSM + 2GIS» = 1, они в начале списка) — такие подтверждения могут быть ложными "
+        "(два заведения в одном доме). Низкое сходство не доказывает ошибку (оператор и вывеска "
+        "одной сети), поэтому это список для проверки, а не исключение. Подробно — methodology.md §7, п. 9.\n"
+    )
+    text += base_md(stages, args.stamp)
+    text += (
+        "\n## Методика и сообщение\n\n"
+        "`Методика/` — краткая методика формирования базы и оценка её качества (docx со схемами), "
+        "`сообщение_руководителю.txt` — сопроводительное письмо. Собраны `workflow/scripts/report_docx.py` "
+        "из тех же файлов базы и метрик, что и этот README.\n"
+    )
+    _load(REPORT).build(out, out / BASE_DIR, table, weak, sum(BUILD_2211.values()), merge, args.stamp,
+                        len(deliveries))
     (out / "README.md").write_text(text, encoding="utf-8")
     print(f"{out}: {len(deliveries)} книг, сводка, methodology.md, README.md")
 

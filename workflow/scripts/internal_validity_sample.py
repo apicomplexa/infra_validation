@@ -19,6 +19,11 @@ pipeline is called that writes.  Deterministic: the order is a SHA-256 rank of
 (seed, stratum, decision key), the shuffle a seeded `random.Random`.
 
 Usage: pixi run python workflow/scripts/internal_validity_sample.py [--force]
+       [--overlay config/finalest.yaml --out results/finalest/internal_validity_v2]
+
+`--overlay` deep-merges a run's config overlay over `config/config.yaml`, so the
+Yandex policy (one card one site, the contractor's hit withdrawn on a closed
+card) is the one the run used; `--out` keeps an earlier sealed sample intact.
 """
 
 from __future__ import annotations
@@ -64,6 +69,7 @@ TARGET = {
     "yandex_closed": 10,
     "yandex_contractor_accepted": 5,
     "yandex_contractor_rejected": 5,
+    "yandex_contractor_withdrawn": 5,
     "merge_unlike_names": 20,
     "merge_alike_names": 9,
     "relink_accepted": 10,
@@ -269,6 +275,14 @@ def obj_key(r: pd.Series) -> tuple:
 # ----------------------------------------------------------------- loading
 
 
+def deep_merge(base: dict, over: dict) -> dict:
+    """Snakemake's --configfile semantics: nested dicts merge, anything else replaces."""
+    out = dict(base)
+    for k, v in (over or {}).items():
+        out[k] = deep_merge(out[k], v) if isinstance(v, dict) and isinstance(out.get(k), dict) else v
+    return out
+
+
 def load_delivery(d: pd.Series):
     tdir = TEMP / d.delivery
     ob = pd.read_parquet(tdir / "objects.parquet")
@@ -372,6 +386,10 @@ def yandex_decisions(col: Collector, ob: pd.DataFrame, ev: pd.DataFrame, caches:
         col.add(stratum, ("yandex", e["yandex_search_url"], chosen.oid or chosen.name), meta, packet)
 
     # The contractor's «Найдено», re-judged by name (no coordinates are kept).
+    con = ev[ev["check"] == "yandex_contractor"]
+    counted = set(con.loc[con["identity"] == "strong", "object_id"])
+    own_closed = ev[(ev["check"] == "yandex") & (ev["yandex_status"] == Y.STATUS_CLOSED)]
+    closed_on = dict(zip(own_closed["object_id"], own_closed["yandex_checked"].astype(str), strict=True))
     for oid, r in ob.iterrows():
         rows = json.loads(r.get("yandex_contractor_rows") or "[]")
         if not rows:
@@ -385,15 +403,15 @@ def yandex_decisions(col: Collector, ob: pd.DataFrame, ev: pd.DataFrame, caches:
         if not allnames:
             continue
         sim, best = max(allnames)
-        stratum = "yandex_contractor_accepted" if c["ok"] else "yandex_contractor_rejected"
-        meta = base_meta(
-            r,
-            oid,
-            "yandex_contractor",
-            "accepted" if c["ok"] else "rejected",
-            "strong" if c["ok"] else "weak",
-            "current",
-        ) | {
+        # The run's verdict, not a re-judgement: with `closed_overrides_contractor` a name match on a
+        # card our query read closed is withdrawn (a state decision, like `yandex_closed`).
+        if c["ok"] and oid not in counted:
+            stratum, decision, ident = "yandex_contractor_withdrawn", "matched_closed", "weak"
+        elif c["ok"]:
+            stratum, decision, ident = "yandex_contractor_accepted", "accepted", "strong"
+        else:
+            stratum, decision, ident = "yandex_contractor_rejected", "rejected", "weak"
+        meta = base_meta(r, oid, "yandex_contractor", decision, ident, "current") | {
             "candidate_ref": c["url"] or cards[0]["url"],
             "candidate_name": best,
             "distance_m": None,
@@ -404,7 +422,12 @@ def yandex_decisions(col: Collector, ob: pd.DataFrame, ev: pd.DataFrame, caches:
             "source": SOURCE_RU["yandex_contractor"],
             "object": obj_block(r),
             "candidate": {"name": best, "note": "координат у карточки подрядчика нет"},
-            "context": {"contractor_found_cards": cards},
+            "context": {"contractor_found_cards": cards}
+            | (
+                {"our_query": f"та же карточка в нашем запросе {closed_on.get(oid, '')}: «Больше не работает»"}
+                if stratum == "yandex_contractor_withdrawn"
+                else {}
+            ),
         }
         col.add(stratum, ("yandex_contractor", *obj_key(r), best), meta, packet)
 
@@ -680,13 +703,20 @@ def git_head() -> str:
 
 
 def main(argv=None) -> int:
+    global OUT
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--force", action="store_true", help="overwrite an existing sealed sample")
+    ap.add_argument("--overlay", type=Path, help="config overlay of the run (e.g. config/finalest.yaml)")
+    ap.add_argument("--out", type=Path, default=OUT, help="output folder (default: the first sample's)")
     args = ap.parse_args(argv)
+    OUT = args.out if args.out.is_absolute() else ROOT / args.out
     if (OUT / "manifest.json").exists() and not args.force:
         raise SystemExit(f"{OUT / 'manifest.json'} exists: the sample is sealed (use --force deliberately)")
 
     cfg = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))
+    if args.overlay:
+        overlay = args.overlay if args.overlay.is_absolute() else ROOT / args.overlay
+        cfg = deep_merge(cfg, yaml.safe_load(overlay.read_text(encoding="utf-8")))
     deliveries = pd.read_csv(DELIVERIES, sep="\t")
     caches = {k: Y.load_cache(ROOT / v) for k, v in cfg["resources"]["yandex_cache"].items()}
     import duckdb
@@ -816,7 +846,14 @@ def main(argv=None) -> int:
         }
         for st in TARGET
     }
-    inputs = [DELIVERIES, CONFIG, REGISTRY, ROOT / cfg["resources"]["overture"], ROOT / cfg["resources"]["foursquare"]]
+    inputs = [
+        DELIVERIES,
+        CONFIG,
+        *([overlay] if args.overlay else []),
+        REGISTRY,
+        ROOT / cfg["resources"]["overture"],
+        ROOT / cfg["resources"]["foursquare"],
+    ]
     inputs += [ROOT / v for v in cfg["resources"]["yandex_cache"].values()]
     for d in deliveries.itertuples():
         inputs += [ROOT / d.path, TEMP / d.delivery / "objects.parquet", TEMP / d.delivery / "rowmap.parquet"]
@@ -861,7 +898,8 @@ def main(argv=None) -> int:
             "an error have no decision",
             "merge_rejections": "the contractor's declined OSM/2GIS pairs are not in the delivery",
         },
-        "inputs": {str(p.relative_to(ROOT)): sha256_file(p) for p in inputs},
+        # A cache another class uses (nm) may be absent here; it is listed, not hashed.
+        "inputs": {str(p.relative_to(ROOT)): sha256_file(p) if p.exists() else None for p in inputs},
         "outputs": outputs,
     }
     (OUT / "manifest.json").write_text(

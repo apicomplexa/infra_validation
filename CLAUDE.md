@@ -25,6 +25,13 @@ is exported for documentation, never deployed).
 - `pixi run yandex-fetch` — the one network step (appends to the Yandex cache);
   never part of `all`. Do not run it without the user's go-ahead.
 - `pixi run docs` — render `docs/architecture.qmd` to `results/docs/`
+- `pixi run calibration-current` then `pixi run deliverable` — the supervisor's folder
+  `results/finalest/deliverable/`: sample-B metrics on the current base first (the build refuses
+  stale ones), then workbooks, base, README, `Методика/*.docx` and the cover message
+  (`workflow/scripts/report_docx.py`; every number read from the base and metric files).
+  Internal validity of the current run: `results/finalest/internal_validity_v2/` (judges in
+  `judges.json`), `pixi run internal-validity --iv results/finalest/internal_validity_v2`.
+  See `docs/changes/2026-11-25-validation-on-base.md`.
 - `pixi run unified-base` — `workflow/scripts/unified_base.py` on a finished run
   (default `results/finalest_nm`; extra args override `--run`, `--deliveries`, `--stamp`)
 - `config/finalest.yaml` switches on the Yandex rules `closed_overrides_contractor`,

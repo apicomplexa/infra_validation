@@ -33,7 +33,9 @@ no multiplicity correction.
 Read-only over `results/finalest/internal_validity/`; writes `eval/` there.
 Deterministic (seeded bootstrap). No network.
 
-Usage: pixi run internal-validity
+Usage: pixi run internal-validity [--iv results/finalest/internal_validity_v2]
+
+A sample folder with `judges.json` names its own judges and judgment files.
 """
 
 from __future__ import annotations
@@ -87,6 +89,7 @@ ROLE = {
     "yandex_closed": "state",
     "yandex_contractor_accepted": "accepted",
     "yandex_contractor_rejected": "rejected",
+    "yandex_contractor_withdrawn": "state",
     "merge_unlike_names": "accepted",
     "merge_alike_names": "accepted",
     "relink_accepted": "accepted",
@@ -466,6 +469,13 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--iv", type=Path, default=IV)
     args = ap.parse_args(argv)
+    # A later sample names its own judges: {"judge1": ["label", ["file", ...]], "judge2": [...]}.
+    spec = args.iv / "judges.json"
+    if spec.exists():
+        JUDGES.clear()
+        JUDGES.update(
+            {k: (v[0], v[1]) for k, v in json.loads(spec.read_text(encoding="utf-8")).items() if not k.startswith("_")}
+        )
     dec = load(args.iv)
     m = metrics(dec)
     ag = agreement(dec)

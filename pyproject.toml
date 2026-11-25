@@ -33,6 +33,9 @@ select = ["E", "W", "F", "I", "B", "UP", "SIM"]
 #   branches, one per case of the methodology, not a nested ternary.
 "packages/licmatch/src/licmatch/brands.py" = ["B007"]
 "packages/licmatch/src/licmatch/scoring.py" = ["SIM108"]
+# report_docx.py: the cover message and the Graphviz labels are Russian text
+# templates; a line break inside them would be a break in the output.
+"workflow/scripts/report_docx.py" = ["E501"]
 
 [tool.snakefmt]
 line_length = 120

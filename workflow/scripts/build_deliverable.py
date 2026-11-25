@@ -16,7 +16,9 @@ verdicts («Общепит?» / «Алкоголь?» / «Табак?») stand a
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import hashlib
+import importlib.util
 import re
 import shutil
 import subprocess
@@ -32,6 +34,9 @@ METHODOLOGY = ROOT / "docs" / "methodology_finalest.md"
 MERGE_REVIEW = ROOT / "results" / "finalest" / "calibration" / "diagnostics" / "osm_gis_merge.csv"
 IV_EVAL = ROOT / "results" / "finalest" / "internal_validity" / "eval"
 DELIVERIES = ROOT / "config" / "deliveries_finalest.tsv"
+UNIFIED_BASE = ROOT / "workflow" / "scripts" / "unified_base.py"
+BASE_DIR = "база"
+BASE_TABLE = "единая_база.xlsx"
 
 CITY_ORDER = ["Архангельск", "Северодвинск", "Новодвинск"]
 CATEGORY = {"catering": "общепит", "alcohol": "алкоголь", "tobacco": "табак"}
@@ -451,6 +456,7 @@ def readme(table: pd.DataFrame, deliveries: list[Delivery], head: str) -> str:
 - `сводка.xlsx`, `сводка.md` — сводная таблица по девяти поставкам: объём, подтверждение, засчитанные
   источники по группам, проверка вида, найденное, но не засчитанное; лист «Как читать» и источник каждого числа.
 - `methodology.md` — методология проверки и валидации (копия `docs/methodology_finalest.md`).
+- `база/` — единая база: одна строка на склеенный объект, по книге на категорию (раздел «Единая база» ниже).
 
 ## Как читать «Основания»
 
@@ -605,9 +611,57 @@ Opus), только по данным пакета; эталон — совпа�
 """
 
 
+def build_base(folder: Path, stamp: str) -> pd.DataFrame:
+    """The unified base of these workbooks (`pixi run unified-base`), in the layout of the nm books.
+
+    Run in-process on the same `results/finalest/` the workbooks were copied
+    from; returns its «Этапы» table for the README.
+    """
+    spec = importlib.util.spec_from_file_location("unified_base", UNIFIED_BASE)
+    ub = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ub)
+    table = folder / BASE_TABLE
+    ub.main(["--run", str(FINALEST), "--deliveries", str(DELIVERIES), "--out", str(table),
+             "--books", str(folder), "--stamp", stamp])
+    return pd.read_excel(table, sheet_name="Этапы")
+
+
+def base_md(st: pd.DataFrame, stamp: str) -> str:
+    total = st[st["Город"].eq("Все три города")]
+    rows = "\n".join(
+        f"| {r['Вид объекта']} | {num(int(r['Объектов после склейки']))} "
+        f"| {num(int(r['Подтверждено (2+ источника)']))} "
+        f"| {num(int(r['из них вид «нет»']))} | {num(int(r['Исключено: Яндекс «Больше не работает»']))} "
+        f"| {num(int(r['В базу']))} |" for _, r in total.iterrows())
+    return f"""
+## Единая база
+
+`база/` — то же, что собрано для медицины, продуктовых, образования и спорта (`pixi run unified-base`):
+`{BASE_TABLE}` — все объекты девяти поставок, по строке на склеенный объект, и по книге на категорию
+(`{stamp} Общепит.xlsx`, `{stamp} Алкоголь.xlsx`, `{stamp} Табак.xlsx`). Листы книги: «База»,
+«Все объекты» (с «Почему не в базе»), «На ручную проверку» (по адресу, со ссылкой на поиск и пустыми
+столбцами для решения), «Этапы», «Возможные дубли», «Переменные» (что значит каждый столбец).
+
+Ничего не пересчитано: значения прочитаны из книг `data/`. Источники — 0/1 по группам, названия
+столбцов как в базе 2021 года (`OSM`, `GIS`, `yandex`, …). В базу объект входит, если «Подтверждено» = 1,
+«Вид?» не «нет» и наш запрос не читает его вывеску в Яндексе закрытой (другой засчитанной карточки
+Яндекса нет). Поэтому в базе меньше объектов, чем подтверждено: «вид «нет»» в общепите — в основном
+фирмы, магазины и клубы, которые подрядчик выгрузил как общепит.
+
+| Категория | Объектов | Подтверждено | из них вид «нет» | Яндекс «Больше не работает» | В базу |
+|---|---:|---:|---:|---:|---:|
+{{rows}}
+
+По городам — лист «Этапы». Таблица содержит данные 2ГИС и отметки Яндекса: не публиковать, пока
+не подтверждены лицензии.
+""".replace("{rows}", rows)
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", type=Path, default=OUT)
+    ap.add_argument("--stamp", default=dt.date.today().strftime("%y%m%d"),
+                    help="file name prefix of the base's workbooks (YYMMDD, default today)")
     args = ap.parse_args(argv)
 
     deliveries = find(pd.read_csv(DELIVERIES, sep="\t", dtype=str))
@@ -650,6 +704,7 @@ def main(argv: list[str] | None = None) -> None:
             "(два заведения в одном доме). Низкое сходство не доказывает ошибку (оператор и вывеска "
             "одной сети), поэтому это список для проверки, а не исключение. Подробно — methodology.md §7, п. 9.\n"
         )
+    text += base_md(build_base(out / BASE_DIR, args.stamp), args.stamp)
     (out / "README.md").write_text(text, encoding="utf-8")
     print(f"{out}: {len(deliveries)} книг, сводка, methodology.md, README.md")
 
